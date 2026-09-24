@@ -13,11 +13,27 @@ interface BucketStyle {
   receiveShadow: boolean;
   /** Draw order (lower first). */
   order: number;
+  /** Hide beyond this distance from the camera to the chunk (m); small details go first. */
+  maxDistance: number;
 }
+
+/** Per-bucket draw distances, scaled by the quality preset's detail factor. */
+const DRAW_DISTANCE: Record<string, number> = {
+  paintWhite: 650,
+  paintYellow: 650,
+  curb: 1000,
+  seawall: 1600,
+  lotGround: 1600,
+  lotBase: 2200,
+  sidewalk: 2200,
+};
 
 export class CityRenderer {
   readonly root = new THREE.Group();
   readonly materials = new Map<string, BucketStyle>();
+  private readonly lodMeshes: { mesh: THREE.Mesh; centre: THREE.Vector3; radius: number; maxDistance: number }[] = [];
+  /** Multiplies all draw distances (quality preset). */
+  detail = 1;
   private readonly water: THREE.Mesh;
   private readonly waterNormal: THREE.Texture;
   private readonly waterMat: WaterMaterial;
@@ -37,7 +53,7 @@ export class CityRenderer {
       std({ color, roughness: 0.62, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
     const set = (key: string, material: THREE.Material, castShadow: boolean, receiveShadow: boolean, order = 0): void => {
       material.name = key;
-      this.materials.set(key, { material, castShadow, receiveShadow, order });
+      this.materials.set(key, { material, castShadow, receiveShadow, order, maxDistance: DRAW_DISTANCE[key] ?? Infinity });
     };
     set('terrain', std({ map: detail, vertexColors: true, roughness: 0.96 }), false, true, 0);
     set('road', std({ map: asphalt, vertexColors: true, roughness: 0.9 }), false, true, 1);
@@ -70,6 +86,10 @@ export class CityRenderer {
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
         group.add(mesh);
+        if (Number.isFinite(style.maxDistance)) {
+          const sphere = geom.boundingSphere!;
+          this.lodMeshes.push({ mesh, centre: sphere.center.clone(), radius: sphere.radius, maxDistance: style.maxDistance });
+        }
       }
       this.root.add(group);
     }
@@ -91,9 +111,17 @@ export class CityRenderer {
     scene.add(this.water);
   }
 
-  update(dt: number): void {
+  update(dt: number, camera?: THREE.Camera): void {
     this.time += dt;
     this.waterMat.update(this.time);
+    if (camera) {
+      const p = camera.position;
+      for (const l of this.lodMeshes) {
+        // Distance from the camera to the nearest point of the mesh's bounding sphere.
+        const d = Math.max(0, p.distanceTo(l.centre) - l.radius);
+        l.mesh.visible = d < l.maxDistance * this.detail;
+      }
+    }
   }
 
   /** All materials, e.g. for shadow/fog registration by the atmosphere module. */

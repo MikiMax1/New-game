@@ -24,7 +24,9 @@ const { world, city } = await loadCity(
 if (!city) throw new Error('city meshes missing');
 
 const cityRenderer = new CityRenderer(game.scene, city);
-game.add({ update: (dt) => cityRenderer.update(dt) });
+game.add({ update: (dt) => cityRenderer.update(dt, game.camera) });
+cityRenderer.detail = game.quality.detail;
+game.onQualityChange((q) => (cityRenderer.detail = q.detail));
 
 // The camera never goes below the displayed ground (or the sea surface).
 const grid = new Grid(world.terrain.res);
