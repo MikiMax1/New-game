@@ -7,6 +7,7 @@ import { makeNoise } from '../noise';
 import { buildBlocks } from './blockMesh';
 import { Heights } from './heights';
 import { BucketBuilder, type MeshBuckets, type MeshBuilder, type MeshData } from './meshData';
+import { buildLandmarks } from './landmarks';
 import { buildRoads } from './roadMesh';
 import { buildBridges, buildHighways } from './structures';
 import { buildFarTerrain } from './farTerrain';
@@ -56,6 +57,7 @@ export function buildCityMeshes(world: WorldData, progress: (stage: string, f: n
   progress('Raising highways', 0.92);
   buildHighways(world, h, sink);
   buildBridges(world, h, sink);
+  buildLandmarks(world, h, sink);
   progress('Shaping terrain', 0.95);
   const noise = makeNoise(world.seed * 101 + 7);
   const TILE = 256;

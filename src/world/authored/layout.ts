@@ -177,7 +177,7 @@ export interface Landmark {
 export const LANDMARKS: Landmark[] = [
   { name: 'Solmar Tower', kind: 'tower', at: P(250, -110) },
   { name: 'Bayfront Park', kind: 'park', at: P(445, -160) },
-  { name: 'Solmar Arena', kind: 'arena', at: P(425, -520) },
+  { name: 'Solmar Arena', kind: 'arena', at: P(318, -520), reserve: { halfX: 58, halfZ: 62 } },
   { name: 'Estadio Solano', kind: 'stadium', at: P(-820, 540), reserve: { halfX: 170, halfZ: 140 } },
   { name: 'Northgate Mall', kind: 'mall', at: P(-150, -1360), reserve: { halfX: 170, halfZ: 110 } },
   { name: 'Mercy General', kind: 'hospital', at: P(20, -880), reserve: { halfX: 110, halfZ: 80 } },

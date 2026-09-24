@@ -66,6 +66,9 @@ export class CityRenderer {
     set('lotGround', std({ map: detail, vertexColors: true, roughness: 0.93, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }), false, true, 2);
     set('concrete', std({ map: concrete, color: 0xcfcac1, roughness: 0.82 }), true, true, 1);
     set('water', this.waterMat.material, false, true, 10);
+    set('structure', std({ map: detail, vertexColors: true, roughness: 0.55, metalness: 0.15 }), true, true, 1);
+    set('glass', std({ color: 0x1d2b33, roughness: 0.06, metalness: 0.9 }), true, true, 1);
+    set('lamp', new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffe2a0, emissiveIntensity: 2.5, roughness: 0.4 }), false, false, 1);
 
     for (const chunk of city.chunks) {
       const group = new THREE.Group();

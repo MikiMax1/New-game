@@ -59,5 +59,7 @@ describe('city meshes', () => {
     }
     if (bad) console.log('badly wound faces', badByBucket);
     expect(bad / total).toBeLessThan(0.0005);
+    // Solid structures must be exact (flat draped surfaces can have a few slivers).
+    for (const k of ['structure', 'concrete', 'curb', 'seawall', 'glass', 'terrain', 'road', 'water']) expect(badByBucket[k] ?? 0).toBe(0);
   });
 });
