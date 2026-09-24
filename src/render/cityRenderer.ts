@@ -31,7 +31,9 @@ const DRAW_DISTANCE: Record<string, number> = {
 export class CityRenderer {
   readonly root = new THREE.Group();
   readonly materials = new Map<string, BucketStyle>();
-  private readonly lodMeshes: { mesh: THREE.Mesh; centre: THREE.Vector3; radius: number; maxDistance: number }[] = [];
+  private readonly lodMeshes: { mesh: THREE.Mesh; centre: THREE.Vector3; radius: number; maxDistance: number; minDistance: number }[] = [];
+  /** Distance where '@lod0' buckets hand over to '@lod1' (m). */
+  lodSwitch = 650;
   /** Multiplies all draw distances (quality preset). */
   detail = 1;
   private readonly water: THREE.Mesh;
@@ -73,7 +75,9 @@ export class CityRenderer {
     for (const chunk of city.chunks) {
       const group = new THREE.Group();
       group.name = `chunk ${chunk.i},${chunk.j}`;
-      for (const [key, data] of chunk.buckets) {
+      for (const [bucketKey, data] of chunk.buckets) {
+        // Keys may carry a level of detail: 'facade@lod0' near, 'facade@lod1' far.
+        const [key, lodTag] = bucketKey.split('@');
         const style = this.materials.get(key);
         if (!style) continue;
         const geom = toBufferGeometry(data);
@@ -82,16 +86,24 @@ export class CityRenderer {
           geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(data.positions.length).fill(1), 3));
         }
         const mesh = new THREE.Mesh(geom, style.material);
-        mesh.name = key;
+        mesh.name = bucketKey;
         mesh.castShadow = style.castShadow;
         mesh.receiveShadow = style.receiveShadow;
         mesh.renderOrder = style.order;
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
         group.add(mesh);
-        if (Number.isFinite(style.maxDistance)) {
+        const near = lodTag === 'lod0';
+        const far = lodTag === 'lod1';
+        if (Number.isFinite(style.maxDistance) || near || far) {
           const sphere = geom.boundingSphere!;
-          this.lodMeshes.push({ mesh, centre: sphere.center.clone(), radius: sphere.radius, maxDistance: style.maxDistance });
+          this.lodMeshes.push({
+            mesh,
+            centre: sphere.center.clone(),
+            radius: sphere.radius,
+            maxDistance: near ? -1 : style.maxDistance,
+            minDistance: far ? -1 : 0,
+          });
         }
       }
       this.root.add(group);
@@ -122,7 +134,10 @@ export class CityRenderer {
       for (const l of this.lodMeshes) {
         // Distance from the camera to the nearest point of the mesh's bounding sphere.
         const d = Math.max(0, p.distanceTo(l.centre) - l.radius);
-        l.mesh.visible = d < l.maxDistance * this.detail;
+        const toCentre = p.distanceTo(l.centre);
+        if (l.maxDistance === -1) l.mesh.visible = toCentre < this.lodSwitch * this.detail + l.radius * 0.5; // near LOD
+        else if (l.minDistance === -1) l.mesh.visible = toCentre >= this.lodSwitch * this.detail + l.radius * 0.5; // far LOD
+        else l.mesh.visible = d < l.maxDistance * this.detail;
       }
     }
   }
