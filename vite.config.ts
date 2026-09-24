@@ -22,7 +22,8 @@ export default defineConfig({
     rollupOptions: { input: pages },
   },
   worker: { format: 'es' },
-  server: { host: true },
+  // Local only by default (no firewall prompt); `npm run dev -- --host` to test on a phone.
+  server: { host: 'localhost', port: 5173 },
   test: {
     include: ['tests/**/*.test.ts'],
     testTimeout: 120000,
