@@ -6,9 +6,10 @@ import type { WorldData } from '../gen/world';
 import { makeNoise } from '../noise';
 import { buildBlocks } from './blockMesh';
 import { Heights } from './heights';
-import { BucketBuilder, type MeshBuckets, type MeshBuilder } from './meshData';
+import { BucketBuilder, type MeshBuckets, type MeshBuilder, type MeshData } from './meshData';
 import { buildRoads } from './roadMesh';
 import { buildBridges, buildHighways } from './structures';
+import { buildFarTerrain } from './farTerrain';
 import { buildTerrainTile } from './terrainMesh';
 
 /** Render chunk size (m): 8 x 8 chunks over the map. */
@@ -30,6 +31,8 @@ export interface CityMeshes {
   displayHeights: Float32Array;
   /** Road node deck heights. */
   nodeY: Float32Array;
+  /** Low-detail land and seabed beyond the map edge. */
+  far: MeshData;
 }
 
 export function buildCityMeshes(world: WorldData, progress: (stage: string, f: number) => void = () => {}): CityMeshes {
@@ -69,5 +72,6 @@ export function buildCityMeshes(world: WorldData, progress: (stage: string, f: n
       chunks.push({ i, j, x: -MAP_HALF + (i + 0.5) * RENDER_CHUNK, z: -MAP_HALF + (j + 0.5) * RENDER_CHUNK, buckets });
     }
   }
-  return { chunks, displayHeights: h.display, nodeY: h.nodeY };
+  const far = buildFarTerrain(world, h, noise);
+  return { chunks, displayHeights: h.display, nodeY: h.nodeY, far };
 }

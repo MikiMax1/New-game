@@ -68,6 +68,13 @@ export class CityRenderer {
       }
       this.root.add(group);
     }
+    // Land and seabed beyond the map edge.
+    const farStyle = this.materials.get('terrain')!;
+    const far = new THREE.Mesh(toBufferGeometry(city.far), farStyle.material);
+    far.name = 'far terrain';
+    far.receiveShadow = true;
+    far.matrixAutoUpdate = false;
+    this.root.add(far);
     scene.add(this.root);
 
     // Sea surface: one big plane at sea level, larger than the map so the horizon is water.
