@@ -1,0 +1,16 @@
+#map { position: fixed; inset: 0; display: block; touch-action: none; cursor: grab; }
+#map:active { cursor: grabbing; }
+.map-panel {
+  position: fixed; top: 12px; right: 12px; z-index: 5; width: min(240px, calc(100vw - 24px));
+  padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.92); color: #2b2622;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18); font-size: 13px;
+}
+.map-panel h1 { margin: 0; font-size: 18px; letter-spacing: 0.06em; color: #b0305f; }
+.map-panel .sub { margin: 2px 0 8px; color: #7a716a; }
+.map-panel dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0 0 8px; }
+.map-panel dt { color: #7a716a; }
+.map-panel dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.map-panel .toggles { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 6px; }
+.map-panel .hint-line { margin: 4px 0; color: #7a716a; font-size: 12px; }
+.map-panel a { color: #b0305f; }
+.map-panel .hover { min-height: 1.3em; color: #4a433d; font-size: 12px; }
