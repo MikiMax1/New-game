@@ -3,6 +3,7 @@
 import { DISTRICTS } from '../authored/districts';
 import { DISTRICT_LABELS, LANDMARKS } from '../authored/layout';
 import type { Block } from '../gen/blocks';
+import { PROP_KINDS } from '../gen/dressing';
 import type { WorldData } from '../gen/world';
 import type { PolygonWithHoles, Ring } from '../types';
 
@@ -208,6 +209,32 @@ export class MapRenderer {
 
   private drawDebug(ctx: CanvasRenderingContext2D, tx: (x: number) => number, tz: (z: number) => number): void {
     const { nodes, edges } = this.world.roads;
+    // Street furniture and trees, coloured by kind.
+    const d = this.world.dressing;
+    const colour = (k: string): string =>
+      k.startsWith('palm') || k === 'liveOak' || k === 'shrub' || k === 'grassClump' ? '#2f7d32'
+        : k === 'trafficSignalMast' ? '#e53935' : k === 'stopSign' ? '#b71c1c' : k.startsWith('streetLight') ? '#fbc02d'
+        : k === 'lifeguardTower' || k === 'beachUmbrella' || k === 'lounger' ? '#8e24aa' : '#546e7a';
+    for (let i = 0; i < d.count; i++) {
+      const k = PROP_KINDS[d.kind[i]];
+      const x = tx(d.pos[i * 3]);
+      const y = tz(d.pos[i * 3 + 2]);
+      ctx.fillStyle = colour(k);
+      ctx.beginPath();
+      ctx.arc(x, y, k === 'liveOak' ? 3 : 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      if (k === 'trafficSignalMast') {
+        // Draw the arm direction: forward (-Z) rotated by yaw.
+        const yaw = d.yaw[i];
+        const len = d.param[i];
+        ctx.strokeStyle = '#e53935';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(tx(d.pos[i * 3] - Math.sin(yaw) * len), tz(d.pos[i * 3 + 2] - Math.cos(yaw) * len));
+        ctx.stroke();
+      }
+    }
     for (const n of nodes) {
       if (n.edges.length === 1) {
         ctx.fillStyle = n.culDeSac ? '#2a9d3a' : '#d62828';

@@ -4,6 +4,7 @@ import { HIGHWAYS, type Highway } from '../authored/layout';
 import { catmullRom } from '../geom';
 import type { DistrictId, Lot, P2, PolygonWithHoles, RoadClass } from '../types';
 import { buildBlocks, type Block } from './blocks';
+import { buildDressing, type Dressing } from './dressing';
 import { LandModel, buildLand } from './land';
 import { buildLots } from './lots';
 import { buildStreets } from './streets';
@@ -51,6 +52,8 @@ export interface WorldData {
   highways: HighwayData[];
   blocks: Block[];
   lots: Lot[];
+  /** Street furniture and vegetation placements. */
+  dressing: Dressing;
   stats: Record<string, number>;
   timings: Record<string, number>;
 }
@@ -117,6 +120,11 @@ export function generateWorld(seed: number, progress: Progress = () => {}): Worl
   const districtCounts: Partial<Record<DistrictId, number>> = {};
   for (const l of lots) districtCounts[l.district] = (districtCounts[l.district] ?? 0) + 1;
 
+  progress('Planting palms', 0.78);
+  const partial = { seed, terrain: { res: TERRAIN_RES, n: terrain.grid.n, origin: terrain.grid.origin, height: terrain.height, shoreDist: terrain.shoreDist, shoreType: terrain.shoreType }, roads: { nodes, edges }, blocks: blocksRes.blocks, lots } as unknown as WorldData;
+  const dressing = buildDressing(partial);
+  lap('dressing');
+
   progress('Done', 1);
   return {
     seed,
@@ -135,6 +143,7 @@ export function generateWorld(seed: number, progress: Progress = () => {}): Worl
     highways,
     blocks: blocksRes.blocks,
     lots,
+    dressing,
     stats: {
       roadNodes: nodes.length,
       roadEdges: edges.length,
@@ -142,6 +151,7 @@ export function generateWorld(seed: number, progress: Progress = () => {}): Worl
       blocks: blocksRes.blocks.length,
       lots: lots.length,
       culDeSacs: streets.culDeSacs.length,
+      props: dressing.count,
       ...Object.fromEntries(Object.entries(districtCounts).map(([k, v]) => [`lots_${k}`, v])),
     },
     timings,
