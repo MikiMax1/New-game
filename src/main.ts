@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import './style.css';
 import { Game } from './game';
+import { Atmosphere } from './render/atmosphere';
+import { PostFX } from './render/post';
 import { isCapture, paramNum, paramNums, paramStr } from './core/params';
 import { CityRenderer } from './render/cityRenderer';
 import { createBuildingMaterials, setBuildingNightFactor } from './render/buildingMaterials';
 import { createParkedCars } from './render/parkedCars';
-import { NightLights, nightFromSun } from './render/nightLights';
+import { NightLights } from './render/nightLights';
 import { DEFAULT_SEED } from './world/config';
 import { Grid } from './world/gen/raster';
 import { loadCity } from './world/loadWorld';
@@ -15,6 +17,19 @@ import { Traffic } from './sim/traffic';
 import { TrafficRenderer } from './render/trafficRenderer';
 
 const game = new Game(document.getElementById('app')!);
+// Physically based sky, sun/moon, cascaded shadows, sky reflections and haze. Created
+// before anything renders: it patches the shader chunks every material uses.
+const atmosphere = new Atmosphere(game.renderer, game.scene, game.camera, game.quality);
+game.setEnvironment(atmosphere);
+const post = new PostFX(game.renderer, game.scene, game.camera, game.quality);
+game.renderFn = () => {
+  post.scotopic = atmosphere.nightFactor;
+  post.render();
+};
+game.onQualityChange((q) => {
+  atmosphere.setQuality(q);
+  post.setQuality(q);
+});
 const seed = paramNum('seed', DEFAULT_SEED);
 const loadingText = document.getElementById('loading-text')!;
 const loadingBar = document.getElementById('loading-bar')!;
@@ -43,7 +58,7 @@ for (const key of ['road', 'sidewalk', 'lotGround', 'lotBase', 'terrain', 'paint
 }
 game.add({
   update: () => {
-    const n = nightFromSun(game.environment.sunDirection);
+    const n = atmosphere.nightFactor;
     night.setNight(n);
     setBuildingNightFactor(buildingMaterials, n, game.environment.timeOfDay);
   },
@@ -70,7 +85,7 @@ game.add({
   update: (dt) => {
     game.camera.getWorldDirection(fwd);
     traffic.update(dt, game.camera.position.x, game.camera.position.z, fwd.x, fwd.z);
-    trafficRenderer.update(nightFromSun(game.environment.sunDirection));
+    trafficRenderer.update(atmosphere.nightFactor);
   },
 });
 
@@ -115,7 +130,7 @@ const loading = document.getElementById('loading');
 if (isCapture) loading?.remove();
 else loading?.classList.add('done');
 game.start();
-game.markReady();
+atmosphere.onReady(() => game.markReady());
 
 function addHint(): void {
   if (isCapture) return;
