@@ -7,6 +7,8 @@ import { makeNoise } from '../noise';
 import { buildBlocks } from './blockMesh';
 import { Heights } from './heights';
 import { BucketBuilder, type MeshBuckets, type MeshBuilder, type MeshData } from './meshData';
+import { generateBuilding } from '../buildings';
+import { centroid } from '../geom';
 import { buildLandmarks } from './landmarks';
 import { buildLightMap } from './lightMap';
 import { buildRoads } from './roadMesh';
@@ -61,6 +63,16 @@ export function buildCityMeshes(world: WorldData, progress: (stage: string, f: n
   buildHighways(world, h, sink);
   buildBridges(world, h, sink);
   buildLandmarks(world, h, sink);
+  // Buildings at two levels of detail per chunk: '@lod0' near, '@lod1' far.
+  progress('Raising buildings', 0.9);
+  const lodBuilders: [BucketBuilder, BucketBuilder][] = builders.map(() => [new BucketBuilder(), new BucketBuilder()]);
+  for (const lot of world.lots) {
+    const c = centroid(lot.polygon);
+    const [near, far] = lodBuilders[chunkIndex(c.x, c.z)];
+    generateBuilding(lot, near, 0);
+    generateBuilding(lot, far, 1);
+  }
+
   progress('Shaping terrain', 0.95);
   const noise = makeNoise(world.seed * 101 + 7);
   const TILE = 256;
@@ -75,6 +87,9 @@ export function buildCityMeshes(world: WorldData, progress: (stage: string, f: n
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const buckets = builders[j * n + i].build();
+      const [near, far] = lodBuilders[j * n + i];
+      for (const [k, m] of near.build()) buckets.set(`${k}@lod0`, m);
+      for (const [k, m] of far.build()) buckets.set(`${k}@lod1`, m);
       if (buckets.size === 0) continue;
       chunks.push({ i, j, x: -MAP_HALF + (i + 0.5) * RENDER_CHUNK, z: -MAP_HALF + (j + 0.5) * RENDER_CHUNK, buckets });
     }

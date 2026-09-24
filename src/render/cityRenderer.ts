@@ -41,7 +41,7 @@ export class CityRenderer {
   private readonly waterMat: WaterMaterial;
   private time = 0;
 
-  constructor(scene: THREE.Scene, city: CityMeshes) {
+  constructor(scene: THREE.Scene, city: CityMeshes, extraMaterials?: Map<string, THREE.Material>) {
     this.root.name = 'city';
     const asphalt = asphaltTexture();
     const slab = slabTexture();
@@ -71,6 +71,8 @@ export class CityRenderer {
     set('structure', std({ map: detail, vertexColors: true, roughness: 0.55, metalness: 0.15 }), true, true, 1);
     set('glass', std({ color: 0x1d2b33, roughness: 0.06, metalness: 0.9 }), true, true, 1);
     set('lamp', new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffe2a0, emissiveIntensity: 2.5, roughness: 0.4 }), false, false, 1);
+    // Materials provided by other modules (buildings).
+    for (const [key, material] of extraMaterials ?? []) set(key, material, true, true, 1);
 
     for (const chunk of city.chunks) {
       const group = new THREE.Group();

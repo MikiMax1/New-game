@@ -355,7 +355,21 @@ export function rectInside(r: Rect, ring: readonly P2[], eps = 1e-4): boolean {
  * finds the largest all-inside block, then grows each side analytically to touch the boundary
  * (the front side z0 first, so buildings meet the street line).
  */
-export function largestRect(ring: readonly P2[], maxCells = 120): Rect | null {
+// Both levels of detail fit the same rectangles for a lot, so remember recent results.
+const rectCache = new Map<string, Rect | null>();
+
+export function largestRect(ring: readonly P2[], maxCells = 56): Rect | null {
+  let key = `${maxCells}`;
+  for (const p of ring) key += `|${Math.round(p.x * 100)},${Math.round(p.z * 100)}`;
+  const hit = rectCache.get(key);
+  if (hit !== undefined) return hit ? { ...hit } : null;
+  const r = largestRectUncached(ring, maxCells);
+  if (rectCache.size > 20000) rectCache.clear();
+  rectCache.set(key, r ? { ...r } : null);
+  return r;
+}
+
+function largestRectUncached(ring: readonly P2[], maxCells: number): Rect | null {
   const bb = bbox(ring);
   const w = bb.maxX - bb.minX;
   const d = bb.maxZ - bb.minZ;
@@ -367,10 +381,29 @@ export function largestRect(ring: readonly P2[], maxCells = 120): Rect | null {
   const cz = d / nz;
   const half = Math.hypot(cx, cz) * 0.5;
   const inside = new Uint8Array(nx * nz);
+  // Scanline test: a cell is inside when its whole x-range lies inside the polygon at
+  // its top, middle and bottom (exact for straight walls, far cheaper than per-cell
+  // point and distance tests; rectInside below still validates the result).
+  const intervals = (z: number): number[] => {
+    const xs: number[] = [];
+    for (let k = 0, m = ring.length - 1; k < ring.length; m = k++) {
+      const a = ring[k];
+      const b = ring[m];
+      if ((a.z <= z && b.z > z) || (b.z <= z && a.z > z)) xs.push(a.x + ((z - a.z) / (b.z - a.z)) * (b.x - a.x));
+    }
+    return xs.sort((p, q) => p - q);
+  };
+  const covered = (xs: number[], x0: number, x1: number): boolean => {
+    for (let k = 0; k + 1 < xs.length; k += 2) if (x0 >= xs[k] && x1 <= xs[k + 1]) return true;
+    return false;
+  };
   for (let j = 0; j < nz; j++) {
+    const zTop = bb.minZ + j * cz + 1e-6;
+    const lines = [intervals(zTop), intervals(zTop + cz * 0.5), intervals(zTop + cz - 2e-6)];
     for (let i = 0; i < nx; i++) {
-      const p = { x: bb.minX + (i + 0.5) * cx, z: bb.minZ + (j + 0.5) * cz };
-      if (pointInRing(p, ring) && distToRing(p, ring) >= half * 0.999) inside[j * nx + i] = 1;
+      const x0 = bb.minX + i * cx;
+      const x1 = x0 + cx;
+      if (lines[0].length && covered(lines[0], x0, x1) && covered(lines[1], x0, x1) && covered(lines[2], x0, x1)) inside[j * nx + i] = 1;
     }
   }
   // largest rectangle of ones (histogram method)
