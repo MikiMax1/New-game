@@ -10,6 +10,8 @@ import { Grid } from './world/gen/raster';
 import { loadCity } from './world/loadWorld';
 import { SPOT_NAMES, findSpot } from './world/spots';
 import { Minimap } from './ui/minimap';
+import { Traffic } from './sim/traffic';
+import { TrafficRenderer } from './render/trafficRenderer';
 
 const game = new Game(document.getElementById('app')!);
 const seed = paramNum('seed', DEFAULT_SEED);
@@ -44,6 +46,24 @@ game.add({ update: () => parkedCars.update(game.camera) });
 game.onQualityChange((q) => {
   parkedCars.radius = 280 * q.detail;
   parkedCars.invalidate();
+});
+
+// Ambient traffic around the camera.
+const trafficGrid = new Grid(world.terrain.res);
+const traffic = new Traffic(world, (x, z, edge, t) => {
+  const E = world.roads.edges[edge];
+  if (E.bridge) return city.nodeY[E.a] * (1 - t) + city.nodeY[E.b] * t;
+  return Math.max(0.3, trafficGrid.sample(world.terrain.height, x, z));
+});
+traffic.density = Math.round(150 * game.quality.detail);
+const trafficRenderer = new TrafficRenderer(game.scene, traffic, 260);
+const fwd = new THREE.Vector3();
+game.add({
+  update: (dt) => {
+    game.camera.getWorldDirection(fwd);
+    traffic.update(dt, game.camera.position.x, game.camera.position.z, fwd.x, fwd.z);
+    trafficRenderer.update(nightFromSun(game.environment.sunDirection));
+  },
 });
 
 // The camera never goes below the displayed ground (or the sea surface).
