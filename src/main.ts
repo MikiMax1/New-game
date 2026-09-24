@@ -4,6 +4,7 @@ import { Game } from './game';
 import { isCapture, paramNum, paramNums, paramStr } from './core/params';
 import { CityRenderer } from './render/cityRenderer';
 import { createParkedCars } from './render/parkedCars';
+import { NightLights, nightFromSun } from './render/nightLights';
 import { DEFAULT_SEED } from './world/config';
 import { Grid } from './world/gen/raster';
 import { loadCity } from './world/loadWorld';
@@ -28,6 +29,14 @@ const cityRenderer = new CityRenderer(game.scene, city);
 game.add({ update: (dt) => cityRenderer.update(dt, game.camera) });
 cityRenderer.detail = game.quality.detail;
 game.onQualityChange((q) => (cityRenderer.detail = q.detail));
+
+// Street-light pools on the ground at night.
+const night = new NightLights(city.lightMap);
+for (const key of ['road', 'sidewalk', 'lotGround', 'lotBase', 'terrain', 'paintWhite', 'paintYellow', 'curb']) {
+  const m = cityRenderer.materials.get(key);
+  if (m) night.apply(m.material);
+}
+game.add({ update: () => night.setNight(nightFromSun(game.environment.sunDirection)) });
 
 const parkedCars = createParkedCars(game.scene, world.parked, 280 * game.quality.detail);
 game.add({ update: () => parkedCars.update(game.camera) });

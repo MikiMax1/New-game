@@ -13,7 +13,7 @@ self.onmessage = (e: MessageEvent<{ seed: number; meshes: boolean }>) => {
   if (city) {
     transfer.push(city.displayHeights.buffer as ArrayBuffer, city.nodeY.buffer as ArrayBuffer);
     for (const c of city.chunks) for (const m of c.buckets.values()) transfer.push(...meshTransferables(m));
-    transfer.push(...meshTransferables(city.far));
+    transfer.push(...meshTransferables(city.far), city.lightMap.buffer as ArrayBuffer);
   }
   self.postMessage({ type: 'done', world, city }, { transfer });
 };

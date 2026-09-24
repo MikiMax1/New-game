@@ -8,6 +8,7 @@ import { buildBlocks } from './blockMesh';
 import { Heights } from './heights';
 import { BucketBuilder, type MeshBuckets, type MeshBuilder, type MeshData } from './meshData';
 import { buildLandmarks } from './landmarks';
+import { buildLightMap } from './lightMap';
 import { buildRoads } from './roadMesh';
 import { buildBridges, buildHighways } from './structures';
 import { buildFarTerrain } from './farTerrain';
@@ -35,6 +36,8 @@ export interface CityMeshes {
   nodeY: Float32Array;
   /** Low-detail land and seabed beyond the map edge. */
   far: MeshData;
+  /** Street-light pools (LIGHTMAP_SIZE^2, one byte per texel). */
+  lightMap: Uint8Array;
 }
 
 export function buildCityMeshes(world: WorldData, progress: (stage: string, f: number) => void = () => {}): CityMeshes {
@@ -77,5 +80,6 @@ export function buildCityMeshes(world: WorldData, progress: (stage: string, f: n
     }
   }
   const far = buildFarTerrain(world, h, noise);
-  return { chunks, displayHeights: h.display, nodeY: h.nodeY, far };
+  const lightMap = buildLightMap(world.dressing);
+  return { chunks, displayHeights: h.display, nodeY: h.nodeY, far, lightMap };
 }
