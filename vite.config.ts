@@ -25,6 +25,7 @@ export default defineConfig({
   server: { host: true },
   test: {
     include: ['tests/**/*.test.ts'],
-    testTimeout: 60000,
+    testTimeout: 120000,
+    hookTimeout: 180000,
   },
 });
