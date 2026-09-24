@@ -3,7 +3,7 @@
 //
 //   node tools/shoot.mjs "index.html?cam=0,50,200&look=0,0,0" out.png ["map.html?seed=2" map.png ...]
 //
-// Options:  --size 1280x720   --timeout 240 (seconds per shot)   --url http://host:port (use a running server)
+// Options:  --size 1280x720   --timeout 240 (seconds per shot)   --url http://host:port (use a running server)   --ui 1 (keep the HUD)
 // Pages set window.__READY = true when they are ready to be captured; `capture=1` is added automatically.
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
@@ -11,7 +11,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const args = process.argv.slice(2);
-const opts = { size: '1280x720', timeout: 240, url: '' };
+const opts = { size: '1280x720', timeout: 240, url: '', ui: '' };
 const shots = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -50,7 +50,8 @@ try {
     });
     page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
     const sep = shot.page.includes('?') ? '&' : '?';
-    const url = `${base}/${shot.page}${sep}capture=1`;
+    // --ui 1 keeps the HUD (no capture mode).
+    const url = opts.ui ? `${base}/${shot.page}` : `${base}/${shot.page}${sep}capture=1`;
     const t0 = Date.now();
     process.stdout.write(`shot ${shot.page} -> ${shot.out} ... `);
     try {

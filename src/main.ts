@@ -9,6 +9,7 @@ import { DEFAULT_SEED } from './world/config';
 import { Grid } from './world/gen/raster';
 import { loadCity } from './world/loadWorld';
 import { SPOT_NAMES, findSpot } from './world/spots';
+import { Minimap } from './ui/minimap';
 
 const game = new Game(document.getElementById('app')!);
 const seed = paramNum('seed', DEFAULT_SEED);
@@ -74,6 +75,11 @@ game.add({
   },
 });
 
+if (!isCapture) {
+  const minimap = new Minimap(world, game.fly, game.input);
+  game.add({ update: () => minimap.update() });
+}
+
 game.overlay.addProvider(() => `world seed ${seed}   roads ${world.stats.roadKm} km   lots ${world.stats.lots}   props ${world.stats.props}   parked cars ${world.stats.parkedCars}`);
 
 addHint();
@@ -92,6 +98,6 @@ function addHint(): void {
     '<kbd>Click</kbd> look around &nbsp; <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly<br>' +
     '<kbd>E</kbd>/<kbd>Q</kbd> up/down &nbsp; <kbd>Shift</kbd> fast &nbsp; wheel: speed<br>' +
     '<kbd>1</kbd>–<kbd>9</kbd> photo spots &nbsp; <kbd>[</kbd><kbd>]</kbd> time of day<br>' +
-    '<kbd>O</kbd> quality &nbsp; <kbd>F3</kbd> stats &nbsp; <kbd>F2</kbd> screenshot &nbsp; <a href="./map.html" style="color:#ff9ccf">Map</a>';
+    '<kbd>M</kbd> map &nbsp; <kbd>O</kbd> quality &nbsp; <kbd>F3</kbd> stats &nbsp; <kbd>F2</kbd> screenshot';
   document.body.appendChild(el);
 }
