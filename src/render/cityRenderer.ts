@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import type { CityMeshes } from '../world/mesh/chunks';
 import { toBufferGeometry } from './meshConvert';
 import { asphaltTexture, concreteTexture, detailTexture, slabTexture, waterNormalTexture } from './textures';
+import { createWaterMaterial, farWaterGeometry, type WaterMaterial } from './waterMaterial';
+import { MAP_HALF } from '../world/config';
 
 interface BucketStyle {
   material: THREE.Material;
@@ -18,6 +20,7 @@ export class CityRenderer {
   readonly materials = new Map<string, BucketStyle>();
   private readonly water: THREE.Mesh;
   private readonly waterNormal: THREE.Texture;
+  private readonly waterMat: WaterMaterial;
   private time = 0;
 
   constructor(scene: THREE.Scene, city: CityMeshes) {
@@ -27,6 +30,7 @@ export class CityRenderer {
     const detail = detailTexture();
     const concrete = concreteTexture();
     this.waterNormal = waterNormalTexture();
+    this.waterMat = createWaterMaterial(this.waterNormal);
 
     const std = (params: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial(params);
     const paint = (color: number): THREE.MeshStandardMaterial =>
@@ -45,6 +49,7 @@ export class CityRenderer {
     set('lotBase', std({ map: detail, vertexColors: true, roughness: 0.95 }), false, true, 1);
     set('lotGround', std({ map: detail, vertexColors: true, roughness: 0.93, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }), false, true, 2);
     set('concrete', std({ map: concrete, color: 0xcfcac1, roughness: 0.82 }), true, true, 1);
+    set('water', this.waterMat.material, false, true, 10);
 
     for (const chunk of city.chunks) {
       const group = new THREE.Group();
@@ -77,30 +82,18 @@ export class CityRenderer {
     this.root.add(far);
     scene.add(this.root);
 
-    // Sea surface: one big plane at sea level, larger than the map so the horizon is water.
-    const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x0f3c46,
-      roughness: 0.06,
-      metalness: 0.0,
-      normalMap: this.waterNormal,
-      normalScale: new THREE.Vector2(0.35, 0.35),
-      transparent: true,
-      opacity: 0.84,
-      depthWrite: false,
-    });
-    this.waterNormal.repeat.set(900, 900);
-    const plane = new THREE.PlaneGeometry(24000, 24000, 1, 1).rotateX(-Math.PI / 2);
-    this.water = new THREE.Mesh(plane, waterMat);
+    // Open sea around the map; the map's own water comes from the chunk meshes.
+    this.water = new THREE.Mesh(farWaterGeometry(MAP_HALF, 14000), this.waterMat.material);
     this.water.name = 'sea';
-    this.water.position.y = 0;
-    this.water.renderOrder = 5;
+    this.water.renderOrder = 10;
     this.water.receiveShadow = true;
+    this.water.matrixAutoUpdate = false;
     scene.add(this.water);
   }
 
   update(dt: number): void {
     this.time += dt;
-    this.waterNormal.offset.set(this.time * 0.004, this.time * 0.0025);
+    this.waterMat.update(this.time);
   }
 
   /** All materials, e.g. for shadow/fog registration by the atmosphere module. */

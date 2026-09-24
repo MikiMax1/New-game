@@ -12,7 +12,7 @@ beforeAll(() => {
   ms = performance.now() - t0;
 });
 
-const UP_BUCKETS = new Set(['terrain', 'road', 'paintWhite', 'paintYellow', 'sidewalk', 'lotGround', 'lotBase']);
+const UP_BUCKETS = new Set(['terrain', 'road', 'paintWhite', 'paintYellow', 'sidewalk', 'lotGround', 'lotBase', 'water']);
 
 describe('city meshes', () => {
   it('builds in reasonable time and reports sizes', () => {

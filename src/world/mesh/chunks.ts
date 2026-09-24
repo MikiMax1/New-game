@@ -11,6 +11,7 @@ import { buildRoads } from './roadMesh';
 import { buildBridges, buildHighways } from './structures';
 import { buildFarTerrain } from './farTerrain';
 import { buildTerrainTile } from './terrainMesh';
+import { buildWaterTile } from './waterMesh';
 
 /** Render chunk size (m): 8 x 8 chunks over the map. */
 export const RENDER_CHUNK = 512;
@@ -61,6 +62,7 @@ export function buildCityMeshes(world: WorldData, progress: (stage: string, f: n
   for (let z0 = -MAP_HALF; z0 < MAP_HALF; z0 += TILE) {
     for (let x0 = -MAP_HALF; x0 < MAP_HALF; x0 += TILE) {
       buildTerrainTile(world, h, x0, z0, TILE, noise, sink(x0 + TILE / 2, z0 + TILE / 2, 'terrain'));
+      buildWaterTile(world, x0, z0, TILE, sink(x0 + TILE / 2, z0 + TILE / 2, 'water'));
     }
   }
 
