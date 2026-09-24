@@ -10,6 +10,8 @@ export interface StreamPart {
   castShadow: boolean;
   /** Per-instance colour (e.g. car paint). */
   tint?: boolean;
+  /** Custom depth material for shadows (e.g. wind sway). */
+  depthMaterial?: THREE.Material;
 }
 
 export interface StreamModel {
@@ -33,6 +35,8 @@ const CELL = 64;
 export class InstanceStreamer {
   readonly group = new THREE.Group();
   radius: number;
+  /** Items closer than this are skipped (another streamer draws them in more detail). */
+  innerRadius = 0;
   private readonly grid = new Map<number, number[]>();
   private readonly meshes: (THREE.InstancedMesh | null)[][];
   private readonly last = new THREE.Vector3(Infinity, 0, Infinity);
@@ -74,7 +78,8 @@ export class InstanceStreamer {
         for (const i of list) {
           const dx = s.pos[i * 3] - c.x;
           const dz = s.pos[i * 3 + 2] - c.z;
-          if (dx * dx + dz * dz <= r * r) perModel[s.model(i)]?.push(i);
+          const d2 = dx * dx + dz * dz;
+          if (d2 <= r * r && d2 >= this.innerRadius * this.innerRadius) perModel[s.model(i)]?.push(i);
         }
       }
     }
@@ -97,6 +102,7 @@ export class InstanceStreamer {
           mesh.castShadow = part.castShadow;
           mesh.receiveShadow = true;
           mesh.frustumCulled = false;
+          if (part.depthMaterial) mesh.customDepthMaterial = part.depthMaterial;
           if (part.tint) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
           this.group.add(mesh);
           this.meshes[mi][pi] = mesh;

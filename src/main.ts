@@ -7,6 +7,7 @@ import { isCapture, paramNum, paramNums, paramStr } from './core/params';
 import { CityRenderer } from './render/cityRenderer';
 import { createBuildingMaterials, setBuildingNightFactor } from './render/buildingMaterials';
 import { createParkedCars } from './render/parkedCars';
+import { CityProps } from './render/cityProps';
 import { NightLights } from './render/nightLights';
 import { DEFAULT_SEED } from './world/config';
 import { Grid } from './world/gen/raster';
@@ -71,6 +72,10 @@ game.onQualityChange((q) => {
   parkedCars.invalidate();
 });
 
+// Palms, trees and street furniture.
+const props = new CityProps(game.scene, world.dressing, game.quality.detail);
+game.onQualityChange((q) => props.setDetail(q.detail));
+
 // Ambient traffic around the camera.
 const trafficGrid = new Grid(world.terrain.res);
 const traffic = new Traffic(world, (x, z, edge, t) => {
@@ -86,6 +91,8 @@ game.add({
     game.camera.getWorldDirection(fwd);
     traffic.update(dt, game.camera.position.x, game.camera.position.z, fwd.x, fwd.z);
     trafficRenderer.update(atmosphere.nightFactor);
+    // Props share the traffic clock so signal lenses match what cars obey.
+    props.update(game.camera, traffic.clock, atmosphere.nightFactor);
   },
 });
 

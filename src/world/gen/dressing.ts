@@ -34,6 +34,8 @@ export interface Dressing {
   variant: Uint8Array;
   /** Extra per-instance parameter (e.g. signal arm length in metres). */
   param: Float32Array;
+  /** 1 for road nodes controlled by traffic signals (shared with the traffic sim). */
+  signalNodes: Uint8Array;
 }
 
 interface Placed {
@@ -211,7 +213,8 @@ export function buildDressing(world: WorldData): Dressing {
           const x = p.x + lx * off;
           const z = p.z + lz * off;
           if (shore(x, z) < 1) continue;
-          place({ kind: 'utilityPole', x, y: ground(x, z) + (sidewalk ? CURB : 0), z, yaw: yawFacing(p.dx, p.dz), scale: 1, variant: crng.int(0, 2), param: 0 }, 1.0);
+          // Crossarms run along the pole's Z, so wires (along X) follow the curb.
+          place({ kind: 'utilityPole', x, y: ground(x, z) + (sidewalk ? CURB : 0), z, yaw: Math.atan2(-p.dz, p.dx), scale: 1, variant: crng.int(0, 2), param: 0 }, 1.0);
         }
       }
 
@@ -289,6 +292,7 @@ export function buildDressing(world: WorldData): Dressing {
   }
 
   // ---- Intersections: signals and stop signs ---------------------------------------
+  const signalNodes = new Uint8Array(nodes.length);
   for (let n = 0; n < nodes.length; n++) {
     const N = nodes[n];
     if (N.edges.length < 3) continue;
@@ -298,6 +302,8 @@ export function buildDressing(world: WorldData): Dressing {
     const clear = junctionClear(n) - 1.5;
     const district = model.districtAt(N.x, N.z);
     const urban = district !== 'cypressEdge';
+    const signalised = (major >= 2 || (district === 'downtown' && major + N.edges.length >= 4)) && urban;
+    if (signalised) signalNodes[n] = 1;
     for (const e of N.edges) {
       const E = edges[e];
       const o = nodes[E.a === n ? E.b : E.a];
@@ -315,11 +321,11 @@ export function buildDressing(world: WorldData): Dressing {
       if (shore(x, z) < 1) continue;
       const y = ground(x, z) + (blockAt(x, z) ? CURB : 0);
       const isMajor = E.cls === 'arterial' || E.cls === 'avenue';
-      if ((major >= 2 || (district === 'downtown' && major + N.edges.length >= 4)) && urban) {
-        // Signalised: a mast arm on each approach's right corner, the arm reaching over
-        // its lanes (toward the approach's left); the model's arm is along its forward axis.
+      if (signalised) {
+        // A mast arm on each approach's right corner. The heads (model -Z) face the
+        // oncoming traffic and the arm (model +X) then reaches left over its lanes.
         const arm = hw >= 7 ? 12 : 8;
-        place({ kind: 'trafficSignalMast', x, y, z, yaw: yawFacing(-rx, -rz), scale: 1, variant: arm >= 12 ? 1 : 0, param: arm }, 1.2);
+        place({ kind: 'trafficSignalMast', x, y, z, yaw: yawFacing(dx, dz), scale: 1, variant: arm >= 12 ? 1 : 0, param: arm }, 1.2);
       } else if (urban && !isMajor) {
         // Side streets stop for main roads; residential corners are all-way stops.
         place({ kind: 'stopSign', x, y, z, yaw: yawFacing(dx, dz), scale: 1, variant: 0, param: 0 }, 0.6);
@@ -407,6 +413,7 @@ export function buildDressing(world: WorldData): Dressing {
   // Pack.
   const count = out.length;
   const d: Dressing = {
+    signalNodes,
     count,
     kind: new Uint8Array(count),
     pos: new Float32Array(count * 3),

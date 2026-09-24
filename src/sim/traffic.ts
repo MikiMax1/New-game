@@ -44,9 +44,6 @@ interface NodeInfo {
   signal: boolean;
   stop: boolean;
   radius: number;
-  /** For signals: angle of phase group A. */
-  axis: number;
-  offset: number;
 }
 
 export class Traffic {
@@ -80,19 +77,15 @@ export class Traffic {
       if (!list) this.edgeGrid.set(k, (list = []));
       list.push(i);
     });
-    // Junction control, mirroring the street dressing: signals where main roads cross
-    // (and throughout downtown), stop signs elsewhere.
+    // Junction control: signals where the dressing put signal masts, stop signs elsewhere.
     this.info = this.nodes.map((n, i) => {
       const deg = n.edges.length;
-      if (deg < 3) return { signal: false, stop: false, radius: 0, axis: 0, offset: 0 };
-      const major = new Set(n.edges.filter((e) => this.edges[e].cls === 'arterial' || this.edges[e].cls === 'avenue').map((e) => this.edges[e].name)).size;
+      if (deg < 3) return { signal: false, stop: false, radius: 0 };
       const hws = n.edges.map((e) => this.edges[e].width / 2).sort((p, q) => q - p);
       const radius = Math.sqrt(hws[1] ** 2 + (hws[0] + 6) ** 2) * 0.92;
-      const first = this.edges[n.edges[0]];
-      const o = this.nodes[first.a === i ? first.b : first.a];
-      const axis = Math.atan2(o.z - n.z, o.x - n.x);
-      const signal = major >= 2 || (major >= 1 && deg >= 4 && Math.abs(n.x) < 600 && Math.abs(n.z) < 600);
-      return { signal, stop: !signal, radius, axis, offset: (i * 7.31) % 60 };
+      // Junctions with signal masts (decided by the street dressing) run on signals.
+      const signal = world.dressing.signalNodes[i] === 1;
+      return { signal, stop: !signal, radius };
     });
   }
 
@@ -131,19 +124,23 @@ export class Traffic {
     return !this.nodes[node].edges.some((e) => e !== edge && (this.edges[e].cls === 'arterial' || this.edges[e].cls === 'avenue') && this.edges[e].name !== this.edges[edge].name);
   }
 
+  /**
+   * Same city-wide cycle as the signal lenses (render/props shaderPatches): heads facing
+   * along world Z are green for the first 25 s of each 60 s, amber to 29 s; heads facing
+   * along X run half a cycle later. Heads face the approaching traffic.
+   */
   private greenFor(node: number, edge: number, forward: boolean): boolean {
-    const inf = this.info[node];
     const E = this.edges[edge];
     const a = this.nodes[forward ? E.a : E.b];
     const n = this.nodes[node];
-    // Approach direction angle, folded to [0, pi).
-    let ang = Math.atan2(a.z - n.z, a.x - n.x) - inf.axis;
-    ang = ((ang % Math.PI) + Math.PI) % Math.PI;
-    const groupA = ang < Math.PI / 4 || ang > (3 * Math.PI) / 4;
-    const cycle = 56;
-    const t = (this.time + inf.offset) % cycle;
-    // A green 0-24, amber 24-27, all-red 27-28; B green 28-52, amber 52-55, all-red 55-56.
-    return groupA ? t < 25 : t >= 28 && t < 53;
+    const group = Math.abs(a.z - n.z) >= Math.abs(a.x - n.x) ? 0 : 1;
+    const st = (((this.time + group * 30) % 60) + 60) % 60;
+    return st <= 25;
+  }
+
+  /** Simulation clock (s); the signal lenses use the same value. */
+  get clock(): number {
+    return this.time;
   }
 
   update(dt: number, camX: number, camZ: number, fwdX = 0, fwdZ = -1): void {
