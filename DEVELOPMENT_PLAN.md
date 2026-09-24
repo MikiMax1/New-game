@@ -5,6 +5,23 @@ The map comes first, realism second, gameplay third.**
 
 ---
 
+## Progress (updated as work lands)
+
+| Milestone | Status | Notes |
+|---|---|---|
+| M0 Foundation | ✅ Done | Vite + TS + Three.js, fly camera, F3 stats, quality presets, screenshot tool, CI |
+| M1 Map blueprint | ✅ Done | Seeded 4 × 4 km city, planar road graph, blocks, ~4,000 lots, `map.html` |
+| M2 Terrain, water, roads | ✅ Done | Paint, crosswalks, curbs, seawalls, bridges, elevated highways, far terrain |
+| M3 Buildings | 🔄 In progress | Procedural facades per district (helper agent) |
+| M4 Streaming and scale | 🟡 Partial | Distance culling per layer, near/far LOD buckets, streamed instancing |
+| M5 Street dressing | 🟡 Partial | ~18k placements and ~5k parked cars done; prop models in progress (helper agent) |
+| M6 Landmarks | 🟡 Partial | Cranes, lighthouse, pier and Ferris wheel, stadium, arena, mall, hospital, marina |
+| R1 Light and sky | 🔄 In progress | Physical sky, sun/moon, cascaded shadows, post-processing (helper agent) |
+| R4 Water | 🟡 Partial | Depth-shaded shallows, ripples, shoreline foam, beach surf |
+| R6 Night | 🟡 Partial | Baked street-light pools; car lights |
+| G4 Traffic | 🟡 Early | Lanes, signals, stop signs, following, turns |
+| UI | 🟡 Partial | GTA-style radar, full map on M |
+
 ## 1. What changed from v1 and why
 
 v1 was a plan for a 2,000-person studio. This version is a plan **I (Claude) can carry out myself**,
