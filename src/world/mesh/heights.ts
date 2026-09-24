@@ -51,7 +51,11 @@ export class Heights {
     for (let k = 0; k < this.grid.count; k++) {
       const c = roadMask[k] | blockMask[k];
       this.covered[k] = c;
-      this.display[k] = t.height[k] - (c && t.shoreDist[k] > 0 ? PAVED_DROP : 0);
+      let y = t.height[k] - (c && t.shoreDist[k] > 0 ? PAVED_DROP : 0);
+      // Under paved blocks right at the water, drop the terrain below sea level so no
+      // ground pokes out in front of the seawall faces.
+      if (blockMask[k] && t.shoreDist[k] > 0 && t.shoreDist[k] < 4.5) y = -1;
+      this.display[k] = y;
     }
     this.nodeY = this.computeDeckHeights();
   }
