@@ -3,6 +3,7 @@ import './style.css';
 import { Game } from './game';
 import { isCapture, paramNum, paramNums, paramStr } from './core/params';
 import { CityRenderer } from './render/cityRenderer';
+import { createParkedCars } from './render/parkedCars';
 import { DEFAULT_SEED } from './world/config';
 import { Grid } from './world/gen/raster';
 import { loadCity } from './world/loadWorld';
@@ -27,6 +28,13 @@ const cityRenderer = new CityRenderer(game.scene, city);
 game.add({ update: (dt) => cityRenderer.update(dt, game.camera) });
 cityRenderer.detail = game.quality.detail;
 game.onQualityChange((q) => (cityRenderer.detail = q.detail));
+
+const parkedCars = createParkedCars(game.scene, world.parked, 280 * game.quality.detail);
+game.add({ update: () => parkedCars.update(game.camera) });
+game.onQualityChange((q) => {
+  parkedCars.radius = 280 * q.detail;
+  parkedCars.invalidate();
+});
 
 // The camera never goes below the displayed ground (or the sea surface).
 const grid = new Grid(world.terrain.res);
@@ -57,7 +65,7 @@ game.add({
   },
 });
 
-game.overlay.addProvider(() => `world seed ${seed}   roads ${world.stats.roadKm} km   lots ${world.stats.lots}   chunks ${city.chunks.length}`);
+game.overlay.addProvider(() => `world seed ${seed}   roads ${world.stats.roadKm} km   lots ${world.stats.lots}   props ${world.stats.props}   parked cars ${world.stats.parkedCars}`);
 
 addHint();
 const loading = document.getElementById('loading');

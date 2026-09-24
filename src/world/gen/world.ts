@@ -5,6 +5,8 @@ import { catmullRom } from '../geom';
 import type { DistrictId, Lot, P2, PolygonWithHoles, RoadClass } from '../types';
 import { buildBlocks, type Block } from './blocks';
 import { buildDressing, type Dressing } from './dressing';
+import { buildParking, type ParkedCars } from './parking';
+import { PAINT_COLORS } from '../vehicles/paint';
 import { LandModel, buildLand } from './land';
 import { buildLots } from './lots';
 import { buildStreets } from './streets';
@@ -54,6 +56,8 @@ export interface WorldData {
   lots: Lot[];
   /** Street furniture and vegetation placements. */
   dressing: Dressing;
+  /** Parked cars. */
+  parked: ParkedCars;
   stats: Record<string, number>;
   timings: Record<string, number>;
 }
@@ -123,6 +127,7 @@ export function generateWorld(seed: number, progress: Progress = () => {}): Worl
   progress('Planting palms', 0.78);
   const partial = { seed, terrain: { res: TERRAIN_RES, n: terrain.grid.n, origin: terrain.grid.origin, height: terrain.height, shoreDist: terrain.shoreDist, shoreType: terrain.shoreType }, roads: { nodes, edges }, blocks: blocksRes.blocks, lots } as unknown as WorldData;
   const dressing = buildDressing(partial);
+  const parked = buildParking(partial, PAINT_COLORS.length);
   lap('dressing');
 
   progress('Done', 1);
@@ -144,6 +149,7 @@ export function generateWorld(seed: number, progress: Progress = () => {}): Worl
     blocks: blocksRes.blocks,
     lots,
     dressing,
+    parked,
     stats: {
       roadNodes: nodes.length,
       roadEdges: edges.length,
@@ -152,6 +158,7 @@ export function generateWorld(seed: number, progress: Progress = () => {}): Worl
       lots: lots.length,
       culDeSacs: streets.culDeSacs.length,
       props: dressing.count,
+      parkedCars: parked.count,
       ...Object.fromEntries(Object.entries(districtCounts).map(([k, v]) => [`lots_${k}`, v])),
     },
     timings,
