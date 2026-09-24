@@ -3,7 +3,10 @@ import { DebugOverlay } from './core/debugOverlay';
 import { FlyCamera } from './core/flyCamera';
 import { Input } from './core/input';
 import { isCapture, paramNum, paramNums } from './core/params';
-import { initialQuality, nextQuality, type Quality } from './core/quality';
+import { detectGpu, type GpuInfo } from './core/gpu';
+import { initialQuality, lowerQuality, nextQuality, type Quality, type QualityChoice } from './core/quality';
+import { markFailed } from './core/startupGuard';
+import { savePref } from './core/storage';
 import { BasicEnvironment, type Environment } from './render/basicEnvironment';
 
 declare global {
@@ -11,7 +14,7 @@ declare global {
     /** Set when the world is loaded and a few frames have rendered (used by tools/shoot.mjs). */
     __READY?: boolean;
     /** Frame statistics for tools. */
-    __STATS?: { calls: number; triangles: number };
+    __STATS?: { calls: number; triangles: number; programs: number };
   }
 }
 
@@ -29,6 +32,9 @@ export class Game {
   readonly overlay: DebugOverlay;
   environment: Environment;
   quality: Quality;
+  readonly gpu: GpuInfo;
+  /** Why the starting quality was chosen (e.g. 'recovered' after a crashed start). */
+  readonly qualityReason: QualityChoice['reason'];
   /** Custom render function (post-processing); defaults to a plain render. */
   renderFn: (() => void) | null = null;
   private readonly updatables: Updatable[] = [];
@@ -40,8 +46,16 @@ export class Game {
   private readonly qualityListeners: ((q: Quality) => void)[] = [];
 
   constructor(container: HTMLElement) {
-    this.quality = initialQuality();
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
+    this.gpu = detectGpu(this.renderer.getContext());
+    const choice = initialQuality(this.gpu);
+    this.quality = choice.quality;
+    this.qualityReason = choice.reason;
+    // The GPU process crashed or the driver reset: say so, and offer a restart at lower quality.
+    this.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.contextLost();
+    });
     this.renderer.info.autoReset = false;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -69,6 +83,7 @@ export class Game {
       return [
         `pos ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}   heading ${heading.toFixed(0)}°   speed ${this.fly.speed.toFixed(0)} m/s`,
         `time ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}   quality ${this.quality.name}   near ${this.camera.near.toFixed(2)}`,
+        `gpu ${this.gpu.kind}: ${this.gpu.renderer.slice(0, 90)}`,
       ];
     });
 
@@ -104,11 +119,28 @@ export class Game {
     this.readyFrames = 0;
   }
 
-  toast(text: string): void {
+  toast(text: string, ms = 1800): void {
     this.toastEl.textContent = text;
     this.toastEl.classList.add('show');
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => this.toastEl.classList.remove('show'), 1800);
+    this.toastTimer = window.setTimeout(() => this.toastEl.classList.remove('show'), ms);
+  }
+
+  private contextLost(): void {
+    this.renderer.setAnimationLoop(null);
+    markFailed(this.quality.name);
+    const lower = lowerQuality(this.quality);
+    const box = document.createElement('div');
+    box.className = 'gpu-lost';
+    box.innerHTML = `<div><div class="title">The graphics driver stopped responding</div>
+      <p>Your browser lost its WebGL context, usually because the GPU ran out of memory or took too long on a frame.
+      The game will start at a lower quality next time.</p>
+      <button type="button" data-q="${lower.name}">Restart at ${lower.name} quality</button></div>`;
+    box.querySelector('button')!.addEventListener('click', () => {
+      savePref('quality', lower.name);
+      location.reload();
+    });
+    document.body.appendChild(box);
   }
 
   start(): void {

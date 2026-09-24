@@ -186,7 +186,7 @@ export class Atmosphere implements Environment {
     this.dayOfYear = options.dayOfYear ?? DEFAULT_DAY_OF_YEAR;
     this.latitude = options.latitude ?? LATITUDE;
     this.moonElongation = options.moonElongation ?? 168;
-    this.cloudCoverage = options.clouds ?? 0.26;
+    this.cloudCoverage = options.clouds ?? 0.2;
     this.haze = options.haze ?? 1;
 
     installAtmosphereChunks(options.debugCascades ?? false);

@@ -4,6 +4,7 @@ import { Game } from './game';
 import { Atmosphere } from './render/atmosphere';
 import { PostFX } from './render/post';
 import { isCapture, paramNum, paramNums, paramStr } from './core/params';
+import { markRunning, markStarting } from './core/startupGuard';
 import { CityRenderer } from './render/cityRenderer';
 import { createBuildingMaterials, setBuildingNightFactor } from './render/buildingMaterials';
 import { createParkedCars } from './render/parkedCars';
@@ -34,16 +35,21 @@ game.onQualityChange((q) => {
 const seed = paramNum('seed', DEFAULT_SEED);
 const loadingText = document.getElementById('loading-text')!;
 const loadingBar = document.getElementById('loading-bar')!;
+const setStage = (stage: string, f: number): void => {
+  loadingText.textContent = stage + '…';
+  loadingBar.style.width = `${Math.round(f * 100)}%`;
+};
+/** Gives the browser a moment to paint the loading screen before the next long step. */
+const paint = (): Promise<void> => new Promise((r) => setTimeout(r, 30));
 
-const { world, city } = await loadCity(
-  seed,
-  (stage, f) => {
-    loadingText.textContent = stage + '…';
-    loadingBar.style.width = `${Math.round(f * 100)}%`;
-  },
-  true,
-);
+// If this start never reaches the running state (the tab or GPU process crashes), the next
+// start drops the quality a step.
+markStarting(game.quality.name);
+
+const { world, city } = await loadCity(seed, setStage, true);
 if (!city) throw new Error('city meshes missing');
+setStage('Building the city', 0.97);
+await paint();
 
 const buildingMaterials = createBuildingMaterials();
 const cityRenderer = new CityRenderer(game.scene, city, buildingMaterials);
@@ -71,6 +77,9 @@ game.onQualityChange((q) => {
   parkedCars.radius = 280 * q.detail;
   parkedCars.invalidate();
 });
+
+setStage('Parking cars and planting palms', 0.98);
+await paint();
 
 // Palms, trees and street furniture.
 const props = new CityProps(game.scene, world.dressing, game.quality.detail);
@@ -133,9 +142,32 @@ if (!isCapture) {
 game.overlay.addProvider(() => `world seed ${seed}   roads ${world.stats.roadKm} km   lots ${world.stats.lots}   props ${world.stats.props}   parked cars ${world.stats.parkedCars}`);
 
 addHint();
+
+// Compile the scene's shaders before the first frame, in the background where the browser
+// supports it (KHR_parallel_shader_compile), instead of stalling the first frame on them.
+setStage('Compiling shaders', 0.99);
+await paint();
+await game.renderer.compileAsync(game.scene, game.camera);
+setStage('Warming up', 1);
+await paint();
+
+// The loading screen stays up over the first frames, which still set up the sky and shadows.
 const loading = document.getElementById('loading');
-if (isCapture) loading?.remove();
-else loading?.classList.add('done');
+const startedAt = performance.now();
+let frames = 0;
+game.add({
+  update: () => {
+    frames++;
+    if (frames === 3) {
+      if (isCapture) loading?.remove();
+      else loading?.classList.add('done');
+      if (game.qualityReason === 'recovered') {
+        game.toast(`The last start didn't finish, so graphics quality is now ${game.quality.name}. Press O to change it.`, 9000);
+      }
+    }
+    if (frames > 30 && performance.now() - startedAt > 6000) markRunning();
+  },
+});
 game.start();
 atmosphere.onReady(() => game.markReady());
 

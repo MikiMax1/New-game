@@ -100,6 +100,17 @@ float shellHit(float h0, float mu, float hShell, bool farRoot) {
   return farRoot ? -b + s : -b - s;
 }
 
+// Everything below runs inside the raymarch loop, so every lookup uses an explicit LOD:
+// implicit-gradient lookups in a loop make Direct3D's shader compiler (Chrome and Edge on
+// Windows) unroll it, which can take long enough to hang the GPU process.
+//
+// Width (m) of the cone one cloud-buffer pixel covers at the current sample; picks the mip
+// level of the detail noise.
+float cloudFootprint = 1.0;
+float noiseLod(float metresPerTexel) {
+  return max(0.0, log2(cloudFootprint / metresPerTexel));
+}
+
 // Bilinear filtering of a thresholded field shows the texel grid as kinked, faceted cloud
 // outlines. The cell field uses a cubic B-spline instead (C2-smooth), built from four bilinear
 // taps (GPU Gems 2, ch. 20).
@@ -117,15 +128,15 @@ vec4 noiseBicubic(vec2 uv) {
   vec2 g1 = w2 + w3;
   vec2 h0 = (i - 0.5 + w1 / g0) / NOISE_SIZE;
   vec2 h1 = (i + 1.5 + w3 / g1) / NOISE_SIZE;
-  return g0.y * (g0.x * texture2D(noiseTex, h0) + g1.x * texture2D(noiseTex, vec2(h1.x, h0.y)))
-       + g1.y * (g0.x * texture2D(noiseTex, vec2(h0.x, h1.y)) + g1.x * texture2D(noiseTex, h1));
+  return g0.y * (g0.x * textureLod(noiseTex, h0, 0.0) + g1.x * textureLod(noiseTex, vec2(h1.x, h0.y), 0.0))
+       + g1.y * (g0.x * textureLod(noiseTex, vec2(h0.x, h1.y), 0.0) + g1.x * textureLod(noiseTex, h1, 0.0));
 }
 
 // lod: mip level of the cell field; long steps sample a pre-filtered (coarser) field so that
 // clouds far away stay smooth instead of turning into speckle.
 float cloudCoverage(vec2 xz, float lod) {
   vec2 q = xz + cloudB.xy;
-  float weather = texture2D(noiseTex, q * (1.0 / 21000.0)).r;
+  float weather = textureLod(noiseTex, q * (1.0 / 21000.0), 0.0).r;
   vec2 cuv = q * (1.0 / 7200.0) + vec2(0.37, 0.61);
   float cells = lod < 0.25 ? noiseBicubic(cuv).g : textureLod(noiseTex, cuv, lod).g;
   float f = cells * 0.7 + weather * 0.3;
@@ -140,16 +151,22 @@ float cloudDensity(vec3 p, float hn, float soft) {
   if (cov <= 0.0) return 0.0;
   // Fair-weather cumulus: flat base, rounded top whose height follows the local coverage;
   // clouds in the denser parts of the weather field grow taller.
-  float weather = texture2D(noiseTex, (p.xz + cloudB.xy) * (1.0 / 21000.0)).r;
+  float weather = textureLod(noiseTex, (p.xz + cloudB.xy) * (1.0 / 21000.0), 0.0).r;
   float top = (0.1 + 0.9 * pow(cov, 0.85)) * (0.55 + 0.45 * weather);
-  float d = smoothstep(0.0, 0.14 + 0.3 * soft, top - hn) * smoothstep(0.0, 0.03 + 0.08 * soft, hn);
+  // Softer, rounder tops (a wide ramp) instead of flat plateaus.
+  float d = smoothstep(0.0, 0.32 + 0.3 * soft, top - hn) * smoothstep(0.0, 0.05 + 0.08 * soft, hn);
   if (d <= 0.0) return 0.0;
   float detailAmount = 1.0 - soft;
   if (detailAmount > 0.0) {
     // Erode only the edges (remap), more toward the top: cauliflower tops, crisp flat bases.
-    vec2 q = p.xz + cloudB.xy * 1.2 + vec2(p.y * 0.4, -p.y * 0.25);
-    float detail = texture2D(noiseTex, q * (1.0 / 900.0)).b * 0.62 + texture2D(noiseTex, q * (1.0 / 240.0)).a * 0.38;
-    float erosion = detail * (0.12 + 0.5 * hn) * detailAmount;
+    // Two detail layers sampled at height-rotated offsets so erosion varies with height
+    // (billows instead of vertical pillars).
+    float ang = p.y * 0.0021;
+    vec2 q = p.xz + cloudB.xy * 1.2;
+    vec2 qr = vec2(q.x * cos(ang) - q.y * sin(ang), q.x * sin(ang) + q.y * cos(ang)) + vec2(p.y * 1.7, -p.y * 1.3);
+    float detail = textureLod(noiseTex, qr * (1.0 / 700.0), noiseLod(700.0 / NOISE_SIZE)).b * 0.6
+                 + textureLod(noiseTex, (qr + vec2(37.0, 91.0) * p.y * 0.05) * (1.0 / 190.0), noiseLod(190.0 / NOISE_SIZE)).a * 0.4;
+    float erosion = detail * (0.18 + 0.55 * hn) * detailAmount;
     d = clamp((d - erosion) / (1.0 - erosion), 0.0, 1.0);
   }
   return d * cloudB.z;
@@ -199,8 +216,10 @@ vec4 cloudLayer(vec3 dir, vec3 sky, float jitter, int steps) {
   float wsum = 0.0;
   float dist = 0.0;
   float t = t0 + jitter * dt;
-  for (int i = 0; i < 128; i++) {
-    if (i >= steps || t > t1 || T < 0.01) break;
+  for (int i = 0; i < steps; i++) {
+    if (t > t1 || T < 0.01) break;
+    // The cloud buffer is a fraction of the screen resolution and then tent-filtered.
+    cloudFootprint = max(1.0, t * pixelAngle * 3.0);
     vec3 p = vec3(0.0, h0, 0.0) + dir * t;
     float h = length(vec3(p.x, p.y + ATM_RG * 1000.0, p.z)) - ATM_RG * 1000.0;
     float hn = (h - base) / cloudA.z;

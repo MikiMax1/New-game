@@ -44,7 +44,7 @@ export class DebugOverlay {
     const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
     const lines = [
       `FPS ${(1000 / avg).toFixed(0)}   ${avg.toFixed(1)} ms avg   ${this.worst.toFixed(1)} ms worst`,
-      `draw calls ${this.calls}   triangles ${(this.triangles / 1e6).toFixed(2)} M`,
+      `draw calls ${this.calls}   triangles ${(this.triangles / 1e6).toFixed(2)} M   shaders ${this.renderer.info.programs?.length ?? 0}`,
       `geometries ${info.memory.geometries}   textures ${info.memory.textures}   programs ${info.programs?.length ?? 0}`,
     ];
     if (mem) lines.push(`JS heap ${(mem.usedJSHeapSize / 1048576).toFixed(0)} MB`);
@@ -60,7 +60,7 @@ export class DebugOverlay {
     this.lastUpdate = now;
   }
 
-  get stats(): { calls: number; triangles: number } {
-    return { calls: this.calls, triangles: this.triangles };
+  get stats(): { calls: number; triangles: number; programs: number } {
+    return { calls: this.calls, triangles: this.triangles, programs: this.renderer.info.programs?.length ?? 0 };
   }
 }

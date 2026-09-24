@@ -78,18 +78,19 @@ void main() {
   vec3 sunDir = vec3(0.0, muS, sqrt(max(0.0, 1.0 - muS * muS)));
   vec3 Lsum = vec3(0.0);
   vec3 Fsum = vec3(0.0);
+  // One flat loop over the SQ x SQ directions (nested loops invite the compiler to unroll).
   const int SQ = 8;
-  for (int i = 0; i < SQ; i++) {
-    for (int j = 0; j < SQ; j++) {
-      float theta = 6.28318530718 * (float(i) + 0.5) / float(SQ);
-      float cosPhi = 1.0 - 2.0 * (float(j) + 0.5) / float(SQ);
-      float sinPhi = sqrt(max(0.0, 1.0 - cosPhi * cosPhi));
-      vec3 dir = vec3(cos(theta) * sinPhi, cosPhi, sin(theta) * sinPhi);
-      vec3 L, F;
-      integrate(r, dir, sunDir, L, F);
-      Lsum += L;
-      Fsum += F;
-    }
+  for (int s = 0; s < SQ * SQ; s++) {
+    int i = s / SQ;
+    int j = s - i * SQ;
+    float theta = 6.28318530718 * (float(i) + 0.5) / float(SQ);
+    float cosPhi = 1.0 - 2.0 * (float(j) + 0.5) / float(SQ);
+    float sinPhi = sqrt(max(0.0, 1.0 - cosPhi * cosPhi));
+    vec3 dir = vec3(cos(theta) * sinPhi, cosPhi, sin(theta) * sinPhi);
+    vec3 L, F;
+    integrate(r, dir, sunDir, L, F);
+    Lsum += L;
+    Fsum += F;
   }
   float n = float(SQ * SQ);
   // Isotropic phase over the sphere: the average over directions.
@@ -117,8 +118,7 @@ vec3 atmSkyRadiance(float r, vec3 dir, vec3 lightDir, vec3 E, int steps) {
   vec3 L = vec3(0.0);
   vec3 T = vec3(1.0);
   float fn = float(steps);
-  for (int i = 0; i < 64; i++) {
-    if (i >= steps) break;
+  for (int i = 0; i < steps; i++) {
     float a = float(i) / fn;
     float b = float(i + 1) / fn;
     float t0 = tMax * a * a;
@@ -209,16 +209,16 @@ void main() {
   vec3 E = vec3(0.0);
   const int NA = 12;
   const int NE = 8;
-  for (int a = 0; a < NA; a++) {
-    for (int k = 0; k < NE; k++) {
-      // Cosine-weighted directions over the upper hemisphere.
-      float xi = (float(k) + 0.5) / float(NE);
-      float cosT = sqrt(1.0 - xi);
-      float sinT = sqrt(xi);
-      float ph = 6.28318530718 * (float(a) + 0.5) / float(NA);
-      vec3 dir = vec3(cos(ph) * sinT, cosT, sin(ph) * sinT);
-      E += atmSkyRadiance(r, dir, sunDir, vec3(1.0), 24);
-    }
+  for (int s = 0; s < NA * NE; s++) {
+    int a = s / NE;
+    int k = s - a * NE;
+    // Cosine-weighted directions over the upper hemisphere.
+    float xi = (float(k) + 0.5) / float(NE);
+    float cosT = sqrt(1.0 - xi);
+    float sinT = sqrt(xi);
+    float ph = 6.28318530718 * (float(a) + 0.5) / float(NA);
+    vec3 dir = vec3(cos(ph) * sinT, cosT, sin(ph) * sinT);
+    E += atmSkyRadiance(r, dir, sunDir, vec3(1.0), 24);
   }
   E *= ATM_PI / float(NA * NE);
   gl_FragColor = vec4(E, 1.0);

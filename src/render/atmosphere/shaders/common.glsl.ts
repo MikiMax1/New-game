@@ -114,15 +114,20 @@ vec2 atmMultiScatUv(float r, float muSun) {
 #endif
 `;
 
-/** GLSL helpers that sample the transmittance and multiple-scattering LUTs. */
+/**
+ * GLSL helpers that sample the transmittance and multiple-scattering LUTs. They are called inside
+ * integration loops, so they sample with an explicit LOD: implicit-gradient lookups in a loop make
+ * Direct3D's shader compiler (Chrome and Edge on Windows) unroll the whole loop nest, which can
+ * take long enough to hang the GPU process.
+ */
 export const atmosphereLutSampling = /* glsl */ `
 vec3 atmTransmittance(sampler2D lut, float r, float mu) {
   if (atmHitsGround(r, mu)) return vec3(0.0);
-  return texture2D(lut, atmTransmittanceUv(r, mu)).rgb;
+  return textureLod(lut, atmTransmittanceUv(r, mu), 0.0).rgb;
 }
 
 vec3 atmMultiScattering(sampler2D lut, float r, float muSun) {
-  return texture2D(lut, atmMultiScatUv(r, muSun)).rgb;
+  return textureLod(lut, atmMultiScatUv(r, muSun), 0.0).rgb;
 }
 `;
 

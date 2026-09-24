@@ -58,3 +58,8 @@ body.capture .hint, body.capture .toast, body.capture .debug-overlay { display: 
 }
 .fullmap { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 12; }
 body.capture .radar, body.capture .fullmap { display: none !important; }
+
+.gpu-lost { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(8, 8, 10, 0.92); color: #eee; font: 15px/1.5 system-ui, sans-serif; }
+.gpu-lost > div { max-width: 460px; }
+.gpu-lost .title { font-size: 20px; font-weight: 700; color: var(--ui-accent); margin-bottom: 8px; }
+.gpu-lost button { margin-top: 12px; padding: 10px 16px; border: 0; border-radius: 6px; background: var(--ui-accent); color: #111; font: inherit; font-weight: 700; cursor: pointer; }

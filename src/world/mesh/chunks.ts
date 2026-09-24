@@ -64,7 +64,7 @@ export function buildCityMeshes(world: WorldData, progress: (stage: string, f: n
   buildBridges(world, h, sink);
   buildLandmarks(world, h, sink);
   // Buildings at two levels of detail per chunk: '@lod0' near, '@lod1' far.
-  progress('Raising buildings', 0.9);
+  progress('Raising buildings', 0.93);
   const lodBuilders: [BucketBuilder, BucketBuilder][] = builders.map(() => [new BucketBuilder(), new BucketBuilder()]);
   for (const lot of world.lots) {
     const c = centroid(lot.polygon);
@@ -83,6 +83,7 @@ export function buildCityMeshes(world: WorldData, progress: (stage: string, f: n
     }
   }
 
+  progress('Packing meshes', 0.96);
   const chunks: ChunkMesh[] = [];
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {

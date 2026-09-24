@@ -1,4 +1,6 @@
+import type { GpuInfo } from './gpu';
 import { paramStr } from './params';
+import { takeFailedQuality } from './startupGuard';
 import { loadPref, savePref } from './storage';
 
 export type QualityName = 'low' | 'medium' | 'high' | 'ultra';
@@ -52,12 +54,43 @@ export function isQualityName(v: string | null): v is QualityName {
   return v !== null && (ORDER as string[]).includes(v);
 }
 
-/** Quality from ?quality=, else the saved preference, else 'high'. */
-export function initialQuality(): Quality {
+export interface QualityChoice {
+  quality: Quality;
+  /** url: ?quality=; recovered: one step below a start that crashed; saved: the player's pick. */
+  reason: 'url' | 'recovered' | 'saved' | 'auto';
+}
+
+/**
+ * Quality from ?quality=; else one step below the quality of a previous start that crashed;
+ * else the saved preference; else a default for this machine's GPU, memory and cores.
+ */
+export function initialQuality(gpu?: GpuInfo): QualityChoice {
   const fromUrl = paramStr('quality', '');
-  if (isQualityName(fromUrl)) return QUALITY[fromUrl];
+  if (isQualityName(fromUrl)) return { quality: QUALITY[fromUrl], reason: 'url' };
+  const failed = takeFailedQuality();
+  if (isQualityName(failed)) {
+    const lower = ORDER[Math.max(0, ORDER.indexOf(failed) - 1)];
+    savePref('quality', lower);
+    return { quality: QUALITY[lower], reason: 'recovered' };
+  }
   const saved = loadPref('quality');
-  return QUALITY[isQualityName(saved) ? saved : 'high'];
+  if (isQualityName(saved)) return { quality: QUALITY[saved], reason: 'saved' };
+  return { quality: QUALITY[autoQuality(gpu)], reason: 'auto' };
+}
+
+/** Default quality: high on a discrete GPU, medium on integrated graphics, low without a GPU. */
+export function autoQuality(gpu?: GpuInfo): QualityName {
+  let q: QualityName = gpu?.kind === 'discrete' ? 'high' : gpu?.kind === 'software' ? 'low' : 'medium';
+  const nav = typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { deviceMemory?: number });
+  const memory = nav?.deviceMemory ?? 8;
+  const cores = nav?.hardwareConcurrency ?? 8;
+  if (memory <= 2 || cores <= 2) q = 'low';
+  else if ((memory <= 4 || cores <= 4) && q === 'high') q = 'medium';
+  return q;
+}
+
+export function lowerQuality(q: Quality): Quality {
+  return QUALITY[ORDER[Math.max(0, ORDER.indexOf(q.name) - 1)]];
 }
 
 export function nextQuality(q: Quality): Quality {
