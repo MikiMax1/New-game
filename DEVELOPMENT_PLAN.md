@@ -12,15 +12,16 @@ The map comes first, realism second, gameplay third.**
 | M0 Foundation | ✅ Done | Vite + TS + Three.js, fly camera, F3 stats, quality presets, screenshot tool, CI |
 | M1 Map blueprint | ✅ Done | Seeded 4 × 4 km city, planar road graph, blocks, ~4,000 lots, `map.html` |
 | M2 Terrain, water, roads | ✅ Done | Paint, crosswalks, curbs, seawalls, bridges, elevated highways, far terrain |
-| M3 Buildings | 🔄 In progress | Procedural facades per district (helper agent) |
+| M3 Buildings | ✅ First pass | Procedural facades per district, near/far LOD; needs the Q3 detail pass |
 | M4 Streaming and scale | 🟡 Partial | Distance culling per layer, near/far LOD buckets, streamed instancing |
-| M5 Street dressing | 🟡 Partial | ~18k placements and ~5k parked cars done; prop models in progress (helper agent) |
+| M5 Street dressing | ✅ First pass | ~18k props (palms, trees, lights, signals, signs, benches), ~5k parked cars |
 | M6 Landmarks | 🟡 Partial | Cranes, lighthouse, pier and Ferris wheel, stadium, arena, mall, hospital, marina |
-| R1 Light and sky | 🔄 In progress | Physical sky, sun/moon, cascaded shadows, post-processing (helper agent) |
+| R1 Light and sky | ✅ First pass | Physical sky, sun/moon, cascaded shadows, sky reflections, haze, AgX, AO, bloom, SMAA |
 | R4 Water | 🟡 Partial | Depth-shaded shallows, ripples, shoreline foam, beach surf |
-| R6 Night | 🟡 Partial | Baked street-light pools; car lights |
-| G4 Traffic | 🟡 Early | Lanes, signals, stop signs, following, turns |
+| R6 Night | 🟡 Partial | Baked street-light pools, lit windows, car lights |
+| G4 Traffic | 🟡 Early | Lanes, signals, stop signs, following, turns; needs the Q5 realism pass |
 | UI | 🟡 Partial | GTA-style radar, full map on M |
+| **Q Quality pass** | 🔄 **Current focus** | See §4A: loading, every reported bug, graphics, cars, traffic |
 
 ## 1. What changed from v1 and why
 
@@ -158,6 +159,115 @@ own debug view.
 
 ---
 
+## 4A. PHASE Q: QUALITY PASS (current focus)
+
+Playtest feedback (September 2026): the game loads slowly and freezes the browser, the whole
+world looks low-detail, cars and all models lack detail, traffic is messy, and there are many
+placement and geometry mistakes. Phase Q fixes all of that **before** any new features. It runs
+as six workstreams; helper agents take the self-contained ones (cars, traffic, buildings) while
+I do loading, world correctness and the graphics pass, then merge and verify everything.
+
+### Q0. Loading and performance (no freezes)
+
+| Problem | Fix | Status |
+|---|---|---|
+| Browser crashed or froze at "Shaping terrain" | Shader loops rewritten so Direct3D (Chrome/Edge on Windows) does not unroll them; shaders compiled in the background before the first frame; named loading stages | ✅ Done |
+| Same quality for every PC | Default quality from the GPU (discrete / integrated / software), memory and cores | ✅ Done |
+| A crash repeats on every start | A start that never finishes lowers the next start's quality one step; lost WebGL context shows a restart button | ✅ Done |
+| 62 shader programs (4 MB of GLSL) compiled at start | Share materials and shader variants: target ≤ 30 programs | Planned |
+| ~0.9 GB peak memory in the loading worker | Typed-array mesh builders instead of JS number arrays; build and hand over chunk by chunk | Planned |
+| Main thread blocked ~2 s after the worker finishes | Create GPU buffers and prop instances over several frames behind the loading screen | Planned |
+| Whole map uploaded to the GPU at once | Stream chunk meshes by distance (upload near chunks first, far ones over time) | Planned |
+
+Acceptance: from double-click to playable in under 20 s on a mid-range laptop, no frozen
+browser tabs, `F3` shows ≤ 30 shaders.
+
+### Q1. World correctness: automated audit plus fixes
+
+Every rule below becomes an automated check in `tests/audit.test.ts` that scans the **whole map**
+(not only the places you screenshotted), so a mistake is found once and never comes back.
+
+| # | Reported / found problem | Rule the audit enforces | Fix |
+|---|---|---|---|
+| 1 | Parked cars standing in travel lanes | Every parked car lies inside a parking lane, a parking lot or a driveway; never in a travel lane, intersection, crosswalk, bus stop or in front of a hydrant | Park only on curb lanes of roads that have them, keep 6 m from corners and crosswalks, heading along the curb |
+| 2 | Palm trees in the middle of sidewalks | Street trees only in tree pits at the curb side of the sidewalk, leaving a ≥ 1.8 m clear walking path; not in front of doors, driveways, ramps or bus stops | Tree-pit placement at the curb offset; skip narrow sidewalks |
+| 3 | Bushes and trees growing through elevated highways and bridges | No vegetation within the footprint of any elevated structure unless it fits under the deck with 1 m clearance | Clearance test against highway and bridge footprints |
+| 4 | Palms and a building inside the stadium bowl | Nothing generated inside a landmark footprint | Landmark footprints reserved before lots and dressing |
+| 5 | Rainbow-coloured walls | Facade colours come from a fixed palette; no NaN / out-of-range shader parameters | Fix the facade parameter bug; clamp in the shader |
+| 6 | House half-buried in a slope | Every building sits on a level pad: the pad is at the highest ground point under the footprint, with a visible plinth or steps, and terrain never covers a door or window | Level lot pads plus foundation walls on sloped lots |
+| 7 | Dark round road patches sticking out over the water | Intersection pavement never extends past the union of its road surfaces; no ground-level junction discs on bridges | Build junction polygons from the connecting road outlines instead of discs |
+| 8 | Jagged, stair-stepped beach and shoreline | Shoreline mesh follows the smooth coastline contour; no 4 m grid steps visible | Contour-following shore strip and water edge; finer shore sampling |
+| 9 | One endless pink hotel "wall" along the beach | No building longer than 70 m on a street frontage; gaps and height variation between neighbours | Split long lots, vary heights, add passages |
+| 10 | Huge empty grey parking lots (stadium) with a visible checkerboard texture | Every parking lot has stall lines, islands, lights and a share of parked cars; no visible texture repetition | Parking-lot generator; anti-tiling textures |
+| 11 | Overlaps in general | No two props, cars or buildings intersect; nothing floats or sinks more than 5 cm; no z-fighting pairs | Global overlap / height audit |
+
+Acceptance: `npm test` runs the audit with zero violations; a fixed "tour" of 20 screenshot
+spots (street and aerial, day and night) is re-shot after each workstream and checked by eye.
+
+### Q2. Graphics upgrade: from "low graphics" to a modern look
+
+| Area | What changes |
+|---|---|
+| Ground materials | High-resolution procedural PBR sets: asphalt with aggregate, cracks, patches, tyre polish and oil stains; worn lane paint; concrete sidewalk slabs with joints; sand with ripples and footprints; grass with colour variation. Anti-tiling (stochastic sampling plus large-scale variation) so no checkerboards |
+| Lighting | Better sky ambient and ambient occlusion, contact shadows, sharper near shadows, reflection probes, exposure and colour grading tuned toward the reference shot |
+| Reflections | Screen-space reflections on glass, cars, water and wet roads |
+| Clouds | 3D-noise clouds with soft, billowing edges (no sculpted facets) |
+| Water | Shoreline blending, better waves and foam, reflections |
+| Anti-aliasing | Temporal AA option for stable edges on thin wires, railings and palm leaves |
+| Street life | Billboards, neon signs, shop fronts, awnings, bus stops, trash, road decals (manholes, drains, patches) |
+| Photo textures | Real photo-scanned CC0 textures if you allow `polyhaven.com`, `dl.polyhaven.org` and `ambientcg.com` (§9) |
+
+### Q3. Buildings and models: detail and realism
+
+- Facades: framed windows with sills and lintels, recessed glass with interior "rooms", balconies,
+  railings, shutters, A/C units, awnings, storefronts with signs and lit interiors, entrance doors
+  and steps.
+- Roofs: parapets, stairwell boxes, HVAC units, water tanks, antennas, solar panels, tile roofs
+  with ridges and overhangs on houses.
+- Massing: setbacks, podiums on towers, varied heights along a street, courtyard gaps.
+- Weathering: dirt near the ground, rain streaks under sills, sun-bleached paint.
+- Far detail: textured far-LOD facades (window grids, colour) instead of plain grey boxes.
+- Landmarks: stadium with real stands, roof ring, concourses and floodlights; the other landmarks
+  get the same care.
+- Props: higher-detail palms, trees, street lights, signals, benches, bins and signs.
+
+### Q4. Cars: realistic models
+
+- Bodies from smooth lofted cross-sections (no boxes): curved hoods, roofs, fenders and bumpers,
+  wheel arches, panel shut lines, window frames and pillars.
+- Parts: headlights and tail lights with lens, reflector and emissive; grilles; mirrors; door
+  handles; wipers; licence plates; exhausts; visible interior (seats, dashboard, steering wheel).
+- Wheels: multi-spoke rims, tyre sidewalls with tread, brake discs and calipers; wheels spin and
+  steer.
+- Materials: clear-coat metallic paint, tinted glass with reflections, chrome, rubber, plastic.
+- At least 12 original body types: sedan, hatchback, coupe, sports car, SUV, pickup, van, taxi,
+  police car, bus, box truck, convertible. Colours follow a real-world mix (lots of white, grey,
+  black, silver).
+- LODs: detailed within ~40 m, simpler up to ~150 m, a box-like shape beyond, so traffic stays fast.
+
+### Q5. Traffic: realistic behaviour
+
+- Smooth lane-centre paths and curved turning paths through junctions; no snapping or sliding.
+- Intelligent Driver Model: realistic acceleration (2–3 m/s²) and braking, safe gaps, and
+  stopping at the stop line (not inside the junction).
+- Junction rules: traffic lights with amber, permissive left turns that yield to oncoming cars,
+  right on red after stopping, 4-way stop order, and a junction "reservation" so crossing cars
+  never overlap.
+- Lane changes on multi-lane roads; merging on highway ramps; correct lane for the next turn.
+- Spawning and despawning out of sight; density by road type and time of day; no cars appearing
+  inside each other.
+- Animation: wheel spin and steering, body pitch when braking and accelerating, roll in turns,
+  brake lights, indicators before turns, headlights at night.
+
+### Order of work
+
+1. Q0 loading fixes (done), then Q1 audit and world fixes, together with the Q3, Q4 and Q5 helper
+   agents working in parallel.
+2. Q2 graphics pass on top of the fixed world.
+3. Merge, re-shoot the 20-spot tour, update this table, push; you test on your PC and report back.
+
+---
+
 ## 5. PHASE 2: REALISM (second priority)
 
 Ordered by realism gained per unit of work. Each has fixed photo spots at dawn, noon, sunset and
@@ -259,6 +369,6 @@ your judgment and anyone you ask.
 
 ## 11. Next step
 
-Say **"start M0"** and I will set up the project, the F3 overlay, the screenshot harness and the
-deploy workflow. **M1 (the 2D map blueprint)** follows right after it, so you can review the map
-layout before anything is built in 3D.
+Phase Q (§4A) is in progress: loading fixes are pushed; the world audit, cars, traffic, buildings
+and the graphics pass follow in that order. Pull the latest version and restart the game after
+each push; the in-game `F3` overlay shows your GPU and quality, which helps when you report issues.
