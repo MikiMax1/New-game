@@ -4,6 +4,8 @@ An original open-world game in the spirit of GTA VI, set in **Port Solmar**, a f
 
 ## Run it
 
+**Just want to play?** See [HOW-TO-PLAY.md](HOW-TO-PLAY.md): install Node.js, then double-click `Start Game.bat`.
+
 ```bash
 npm ci
 npm run dev        # then open the printed URL
