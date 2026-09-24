@@ -29,6 +29,8 @@ export class BasicEnvironment implements Environment {
     u.mieCoefficient.value = 0.004;
     u.mieDirectionalG.value = 0.8;
     scene.add(this.sky, this.sun, this.sun.target, this.hemi);
+    // Humid haze so the horizon fades out (placeholder until the atmosphere module).
+    scene.fog = new THREE.FogExp2(0xc9d6df, 0.00022);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const cam = this.sun.shadow.camera;
@@ -57,6 +59,7 @@ export class BasicEnvironment implements Environment {
   }
 
   dispose(): void {
+    this.scene.fog = null;
     this.scene.remove(this.sky, this.sun, this.sun.target, this.hemi);
     this.sky.geometry.dispose();
     this.sky.material.dispose();

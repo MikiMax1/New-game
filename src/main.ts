@@ -1,31 +1,66 @@
 import * as THREE from 'three';
 import './style.css';
 import { Game } from './game';
-import { isCapture } from './core/params';
+import { isCapture, paramNum, paramNums, paramStr } from './core/params';
+import { CityRenderer } from './render/cityRenderer';
+import { DEFAULT_SEED } from './world/config';
+import { Grid } from './world/gen/raster';
+import { loadCity } from './world/loadWorld';
+import { SPOT_NAMES, findSpot } from './world/spots';
 
-// M0 test scene: a ground plane and a few blocks, until the generated world is wired in.
 const game = new Game(document.getElementById('app')!);
+const seed = paramNum('seed', DEFAULT_SEED);
+const loadingText = document.getElementById('loading-text')!;
+const loadingBar = document.getElementById('loading-bar')!;
 
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2),
-  new THREE.MeshStandardMaterial({ color: 0x6f7a5a, roughness: 0.95 }),
+const { world, city } = await loadCity(
+  seed,
+  (stage, f) => {
+    loadingText.textContent = stage + '…';
+    loadingBar.style.width = `${Math.round(f * 100)}%`;
+  },
+  true,
 );
-ground.receiveShadow = true;
-game.scene.add(ground);
+if (!city) throw new Error('city meshes missing');
 
-const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-const colors = [0xe8d9c4, 0xf2c6c2, 0xbfe0dc, 0xdedede, 0x9fb4c7];
-for (let i = 0; i < 60; i++) {
-  const h = 6 + ((i * 37) % 11) * 9;
-  const m = new THREE.Mesh(box, new THREE.MeshStandardMaterial({ color: colors[i % colors.length], roughness: 0.8 }));
-  m.scale.set(18, h, 18);
-  m.position.set(((i % 10) - 5) * 40, 0, (Math.floor(i / 10) - 3) * 40);
-  m.castShadow = m.receiveShadow = true;
-  game.scene.add(m);
+const cityRenderer = new CityRenderer(game.scene, city);
+game.add({ update: (dt) => cityRenderer.update(dt) });
+
+// The camera never goes below the displayed ground (or the sea surface).
+const grid = new Grid(world.terrain.res);
+const ground = (x: number, z: number): number => Math.max(0, grid.sample(world.terrain.height, x, z));
+game.fly.groundHeight = ground;
+
+function goToSpot(name: string): boolean {
+  const spot = findSpot(name, world, ground);
+  if (!spot) return false;
+  game.fly.lookAt(new THREE.Vector3(...spot.pos), new THREE.Vector3(...spot.look));
+  game.fly.speed = spot.pos[1] > 20 ? 80 : 15;
+  return true;
 }
 
+const spotParam = paramStr('spot', '');
+if (spotParam) goToSpot(spotParam);
+else if (!paramNums('cam')) goToSpot('skyline');
+
+// Number keys jump between photo spots.
+game.add({
+  update: () => {
+    for (let k = 0; k < Math.min(9, SPOT_NAMES.length); k++) {
+      if (game.input.wasPressed(`Digit${k + 1}`)) {
+        goToSpot(SPOT_NAMES[k]);
+        game.toast(`Spot ${k + 1}: ${SPOT_NAMES[k]}`);
+      }
+    }
+  },
+});
+
+game.overlay.addProvider(() => `world seed ${seed}   roads ${world.stats.roadKm} km   lots ${world.stats.lots}   chunks ${city.chunks.length}`);
+
 addHint();
-document.getElementById('loading')?.classList.add('done');
+const loading = document.getElementById('loading');
+if (isCapture) loading?.remove();
+else loading?.classList.add('done');
 game.start();
 game.markReady();
 
@@ -37,6 +72,7 @@ function addHint(): void {
     '<b>Port Solmar</b> (early build)<br>' +
     '<kbd>Click</kbd> look around &nbsp; <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly<br>' +
     '<kbd>E</kbd>/<kbd>Q</kbd> up/down &nbsp; <kbd>Shift</kbd> fast &nbsp; wheel: speed<br>' +
-    '<kbd>[</kbd><kbd>]</kbd> time of day &nbsp; <kbd>O</kbd> quality &nbsp; <kbd>F3</kbd> stats &nbsp; <kbd>F2</kbd> screenshot';
+    '<kbd>1</kbd>–<kbd>9</kbd> photo spots &nbsp; <kbd>[</kbd><kbd>]</kbd> time of day<br>' +
+    '<kbd>O</kbd> quality &nbsp; <kbd>F3</kbd> stats &nbsp; <kbd>F2</kbd> screenshot &nbsp; <a href="./map.html" style="color:#ff9ccf">Map</a>';
   document.body.appendChild(el);
 }

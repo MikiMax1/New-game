@@ -135,7 +135,11 @@ export class Game {
     window.__STATS = this.overlay.stats;
     this.input.endFrame();
 
-    if (this.readyFrames >= 0 && ++this.readyFrames === 4) window.__READY = true;
+    if (this.readyFrames >= 0 && ++this.readyFrames === 4) {
+      window.__READY = true;
+      // Screenshot tools only need this frame; stop rendering so the capture is quick.
+      if (isCapture) this.renderer.setAnimationLoop(null);
+    }
   }
 
   private handleKeys(dt: number): void {

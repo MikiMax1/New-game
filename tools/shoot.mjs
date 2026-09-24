@@ -58,7 +58,7 @@ try {
       await page.waitForFunction(() => window.__READY === true, null, { timeout: opts.timeout * 1000, polling: 250 });
       const stats = await page.evaluate(() => window.__STATS ?? null);
       mkdirSync(dirname(resolve(shot.out)), { recursive: true });
-      await page.screenshot({ path: shot.out });
+      await page.screenshot({ path: shot.out, timeout: opts.timeout * 1000 });
       console.log(`ok ${((Date.now() - t0) / 1000).toFixed(1)}s${stats ? `  calls=${stats.calls} tris=${stats.triangles}` : ''}`);
     } catch (e) {
       failures++;
