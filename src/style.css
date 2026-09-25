@@ -63,3 +63,9 @@ body.capture .radar, body.capture .fullmap { display: none !important; }
 .gpu-lost > div { max-width: 460px; }
 .gpu-lost .title { font-size: 20px; font-weight: 700; color: var(--ui-accent); margin-bottom: 8px; }
 .gpu-lost button { margin-top: 12px; padding: 10px 16px; border: 0; border-radius: 6px; background: var(--ui-accent); color: #111; font: inherit; font-weight: 700; cursor: pointer; }
+
+/* F3 performance overlay (src/engine/statsOverlay.ts): the .debug-overlay panel plus a frame-time graph. */
+.stats-overlay { max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: hidden; }
+.stats-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.stats-graph { display: block; width: min(360px, calc(100vw - 36px)); height: 96px; margin-top: 6px; border-radius: 4px; }
+.stats-graph + .stats-text { margin-top: 6px; }
