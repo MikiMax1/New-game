@@ -27,7 +27,7 @@ Every step ends with a playable build, a 30-spot screenshot tour and the whole-m
 | 1.2 | **HDR linear pipeline**: RGBA16F targets, physical light units (lux and nits), physical camera exposure (EV100) with eye adaptation | Noon, sunset and night have correct brightness without hand-tuning |
 | 1.3 | **Frame graph**: depth pre-pass, G-buffer-lite (normals, roughness, velocity) for screen-space effects, forward+ lighting with clustered lights | 200+ dynamic lights at night without a frame-time spike |
 | 1.4 | **Temporal core**: TAA with jittered projection and motion vectors, plus a temporal upscaler (render at 67–100%) | No jagged edges on wires, railings or palm leaves; stable while moving |
-| 1.5 | **Quality system**: auto-detected presets, dynamic resolution to hold 60 fps, crash-safe start (already done in v2) | Holds its target fps on your PC |
+| 1.5 | **Quality system**: presets from Low to **Extreme**, auto-detected; no frame cap (up to your monitor's refresh rate, e.g. 240 fps); optional dynamic resolution; crash-safe start (already done in v2) | Holds 240 fps on 'High' on a strong PC |
 
 ### Step 2. Streaming and memory core
 | # | Work | Done when |
@@ -153,6 +153,48 @@ boxes), photo-scanned or physically based materials, wear and dirt, and 3+ LODs.
 | 15 | **Driving**: Rapier vehicle physics, surface grip, damage, chase and hood cameras |
 | 16 | **Audio**: engines by RPM, city ambience per district, rain, radio |
 | 17 | **Game**: police and wanted levels, missions, phone, GPS map, save and load |
+
+---
+
+## PART 6: HIGH-END PCs AND HIGH REFRESH RATES
+
+### Step 18. Frame rate: no cap
+| # | Work |
+|---|---|
+| 18.1 | **No frame limiter in the game.** Frames are paced by the browser at your monitor's refresh rate, so a 240 Hz screen gets up to 240 fps |
+| 18.2 | **Truly uncapped mode** (above the refresh rate): the launcher gets an optional "Start Game (Uncapped).bat" that opens Chrome or Edge with `--disable-gpu-vsync --disable-frame-rate-limit` in a separate profile, so fps is limited only by the GPU |
+| 18.3 | Frame-time graph and fps counter in F3 (1% lows, GPU and CPU time), plus an optional fps cap setting (60 / 120 / 144 / 165 / 240 / off) |
+| 18.4 | **Low-latency pipeline**: simulation decoupled from rendering (fixed 120 Hz physics with interpolation), no main-thread stalls, all generation in workers, shader warm-up behind the loading screen |
+| 18.5 | Resolution scale up to 200% (supersampling) and native 4K for strong GPUs |
+
+### Step 19. "Extreme" preset (strong PCs only)
+| # | Feature |
+|---|---|
+| 19.1 | Full-resolution volumetric clouds with more raymarch steps and a second cirrus layer |
+| 19.2 | Screen-space GI at full resolution plus more irradiance probes; multi-bounce light |
+| 19.3 | Full-resolution screen-space reflections with rough-reflection blur; planar water reflections at full resolution |
+| 19.4 | 4096² shadow cascades to 2 km, PCSS soft shadows, contact shadows everywhere, shadows from every street light near the camera |
+| 19.5 | 4K textures within 50 m, parallax-occlusion mapping on all ground and walls |
+| 19.6 | Detail rings doubled: full detail to 500 m, dense grass and shrubs to 150 m, traffic and pedestrian density doubled |
+| 19.7 | Volumetric fog lit by every light (headlights and street lights cut through haze and rain) |
+| 19.8 | Cinematic depth of field, per-object motion blur, film grain, lens flares from bright sources (all optional) |
+
+---
+
+## PART 7: EXTRA REALISM DETAILS (the things that make a picture read as "real")
+
+| Area | Detail |
+|---|---|
+| Light | Sun disc bloom and glare through haze; specular highlights that follow the real sun; light leaking through palm leaves; warm bounce light under balconies; cool blue shade after sunset (the "blue hour") |
+| Sky | Real sunrise and sunset colours for Miami's latitude; stars, Milky Way and moon phases at night; aircraft contrails; distant thunderstorms on the horizon |
+| Air | Heat shimmer above hot asphalt at noon; sea spray haze along the beach; humidity that softens distant towers |
+| Ground | Oil stains at parking spots and stop lines; tyre skid marks; faded crosswalks; cracks with weeds; sand blown onto beach roads; leaves and litter along gutters |
+| Buildings | Slightly different window reflections per pane (real glass is never perfectly flat); open and closed blinds; A/C drips and stains; lit lobbies at night; rooftop pools |
+| Water | Waves breaking on the beach with foam trails; wet sand that shines; boat wakes; reflections of city lights at night |
+| Vegetation | Palm fronds that rustle and bend in gusts; fallen fronds and coconuts; dry and green grass patches; sprinklers in suburban yards |
+| Cars | Reflections moving across the paint as they drive; dust on lower panels; rain beading on glass; headlight beams visible in rain and fog; heat haze behind exhausts |
+| Motion | Birds flying over the beach; flags, awnings and palm shadows moving in the wind; clouds drifting and changing shape |
+| Sound (step 16) | Distance-based echo between towers, waves at the beach, distant sirens and planes |
 
 ---
 
