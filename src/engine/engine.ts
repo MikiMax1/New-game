@@ -7,7 +7,7 @@
 // resolution.
 import * as THREE from 'three';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { AgXToneMapping, PCFSoftShadowMap, type WebGPURenderer } from 'three/webgpu';
+import { AgXToneMapping, PCFShadowMap, type WebGPURenderer } from 'three/webgpu';
 import { FlyCamera } from '../core/flyCamera';
 import { Input } from '../core/input';
 import { isCapture, paramBool, paramNum, paramStr } from '../core/params';
@@ -78,6 +78,8 @@ export class Engine {
   private startedAt = 0;
   private screenshotRequested = false;
   private gpuPending = false;
+  /** Latest GPU frame time (ms) the timestamp queries reported, or -1. */
+  private lastGpuMs = -1;
   private readonly sceneScaleOverride: number;
   private readonly taa: boolean;
 
@@ -94,7 +96,7 @@ export class Engine {
     this.qualityReason = choice.reason;
     renderer.toneMapping = AgXToneMapping;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.shadowMap.type = PCFShadowMap;
     renderer.info.autoReset = false;
     if (backend === 'WebGPU') renderer.lighting = new ClusteredLighting(CLUSTERED_CAPACITY);
     container.appendChild(renderer.domElement);
@@ -128,8 +130,10 @@ export class Engine {
   static async create(container: HTMLElement): Promise<Engine> {
     const param = paramStr('backend', 'auto');
     let engine: Engine | null = null;
-    const setup = await createRenderer(isBackendChoice(param) ? param : 'auto', (message) => engine?.deviceLost(message));
+    // Measured while the GPU device starts up: the main thread is idle then, so frame
+    // callbacks arrive at the display's rate (shader compiles later would slow them).
     const refresh = measureRefreshMs();
+    const setup = await createRenderer(isBackendChoice(param) ? param : 'auto', (message) => engine?.deviceLost(message));
     engine = new Engine(setup.renderer, setup.backend, setup.gpu, setup.fallbackReason, setup.gpuTimer, container, initialQuality(setup.gpu));
     engine.refreshMs = await refresh;
     if (setup.fallbackReason && setup.backend !== 'WebGPU') console.warn(`Engine: running on WebGL 2 (${setup.fallbackReason}).`);
@@ -222,9 +226,10 @@ export class Engine {
 
     this.stats.push(frameMs, performance.now() - cpuStart);
     this.readGpuTime();
-    this.updateResolution(frameMs, now / 1000);
+    this.updateResolution(now / 1000);
     this.overlay.update(now);
     const info = this.renderer.info.render;
+    // Shader programs aren't counted by this renderer's info.
     window.__STATS = { calls: info.drawCalls, triangles: info.triangles, programs: 0 };
     this.framesRendered++;
     if (this.framesRendered > 30 && now - this.startedAt > 6000) markRunning();
@@ -243,17 +248,22 @@ export class Engine {
     Promise.all([this.renderer.resolveTimestampsAsync('render'), this.renderer.resolveTimestampsAsync('compute')])
       .then(([render, compute]) => {
         const ms = (Number(render) || 0) + (Number(compute) || 0);
-        if (ms > 0) this.stats.setGpu(ms);
+        if (ms > 0) {
+          this.stats.setGpu(ms);
+          this.lastGpuMs = ms;
+        }
       })
       .catch(() => undefined)
       .finally(() => (this.gpuPending = false));
   }
 
-  /** Dynamic resolution aims for the frame-rate cap, or the display's refresh rate. */
-  private updateResolution(frameMs: number, now: number): void {
-    const gpuMs = this.stats.recent(this.stats.gpuMs, 0);
+  /**
+   * Dynamic resolution aims the GPU time at the frame-rate cap, or the display's refresh rate.
+   * It needs GPU timings: frame times alone can't tell a busy GPU from waiting for the display.
+   */
+  private updateResolution(now: number): void {
     const budget = this.limiter.cap > 0 ? 1000 / this.limiter.cap : this.refreshMs;
-    if (this.dynamicResolution.update(gpuMs > 0 ? gpuMs : frameMs, budget, now)) {
+    if (this.dynamicResolution.update(this.lastGpuMs, budget, now)) {
       this.frameGraph.setSceneScale(this.dynamicResolution.scale);
     }
   }
@@ -274,7 +284,8 @@ export class Engine {
     if (i.wasPressed('KeyY')) {
       this.dynamicResolution.enabled = !this.dynamicResolution.enabled;
       savePref('dynres', this.dynamicResolution.enabled ? '1' : '0');
-      this.toast(`Dynamic resolution: ${this.dynamicResolution.enabled ? 'on' : 'off'}`);
+      const note = this.dynamicResolution.enabled && !this.gpuTimer ? ' (needs GPU timing, which this browser does not report)' : '';
+      this.toast(`Dynamic resolution: ${this.dynamicResolution.enabled ? 'on' : 'off'}${note}`, note ? 4000 : 1800);
     }
   }
 
@@ -316,7 +327,7 @@ export class Engine {
       `${this.backend}${this.fallbackReason ? ` (${this.fallbackReason})` : ''}   gpu ${this.gpu.kind}: ${this.gpu.renderer.slice(0, 70)}`,
       `quality ${this.quality.name}   output ${size.x}×${size.y}   scene ${Math.round(size.x * scale)}×${Math.round(size.y * scale)} (${Math.round(scale * 100)}%${this.dynamicResolution.enabled ? ' dynamic' : ''})   cap ${this.limiter.cap || 'off'}`,
       `EV100 ${e.ev100.toFixed(2)} → ${e.targetEv100.toFixed(2)}   scene ${formatNits(e.luminance)}   refresh ${(1000 / this.refreshMs).toFixed(0)} Hz`,
-      `draw calls ${info.render.drawCalls}   triangles ${(info.render.triangles / 1e6).toFixed(2)} M   lamps ${this.lamps.active}/${this.lamps.size} of ${this.lamps.count}${this.backend === 'WebGPU' ? ' (clustered)' : ''}`,
+      `draw calls ${info.render.drawCalls}   triangles ${(info.render.triangles / 1e6).toFixed(2)} M   early-z ${this.frameGraph.scenePass.earlyZ ? 'on' : 'off'}   lamps ${this.lamps.active}/${this.lamps.size} of ${this.lamps.count}${this.backend === 'WebGPU' ? ' (clustered)' : ''}`,
       `GPU memory ${mem.total ? (mem.total / 1048576).toFixed(0) + ' MB' : 'n/a'}   geometries ${info.memory.geometries}   textures ${info.memory.textures}`,
     ];
   }

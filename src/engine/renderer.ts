@@ -36,11 +36,35 @@ export function isBackendChoice(v: string): v is BackendChoice {
   return v === 'auto' || v === 'webgpu' || v === 'webgl';
 }
 
+type CreateView = (this: unknown, descriptor?: { swizzle?: unknown }) => unknown;
+let compatInstalled = false;
+
+/**
+ * three r186 passes the identity swizzle 'rgba' to every GPUTexture.createView(); browsers from
+ * before texture-component-swizzle (e.g. Chromium 141) reject the unknown member and WebGPU
+ * fails. Leaving an identity swizzle out means the same thing, so drop it. Call before
+ * creating a WebGPURenderer.
+ */
+export function installWebGPUCompat(): void {
+  if (compatInstalled) return;
+  compatInstalled = true;
+  const gpuTexture = (globalThis as { GPUTexture?: { prototype: { createView: CreateView } } }).GPUTexture;
+  if (!gpuTexture) return;
+  const createView = gpuTexture.prototype.createView;
+  gpuTexture.prototype.createView = function (descriptor) {
+    if (descriptor?.swizzle !== 'rgba') return createView.call(this, descriptor);
+    const plain = { ...descriptor };
+    delete plain.swizzle;
+    return createView.call(this, plain);
+  };
+}
+
 /**
  * Creates and initialises the renderer. `onLost` runs when the GPU device or WebGL context is
  * lost (driver reset, out of memory, GPU process crash).
  */
 export async function createRenderer(choice: BackendChoice, onLost: (message: string) => void): Promise<RendererSetup> {
+  installWebGPUCompat();
   let fallbackReason = '';
   let adapter: Adapter | null = null;
   const wantWebGPU = choice !== 'webgl';

@@ -37,8 +37,17 @@ if (!base) {
 }
 
 // WebGPU needs a secure context: the local server is http://127.0.0.1, which counts as one.
+// Without Vulkan on SwiftShader, presenting WebGPU to a page canvas loses the device.
 const browser = await chromium.launch({
-  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--enable-unsafe-webgpu'],
+  args: [
+    '--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader',
+    '--ignore-gpu-blocklist',
+    '--enable-webgl',
+    '--enable-unsafe-webgpu',
+    '--use-vulkan=swiftshader',
+    '--enable-features=Vulkan',
+  ],
 });
 let failures = 0;
 try {

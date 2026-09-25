@@ -29,6 +29,21 @@ Every step ends with a playable build, a 30-spot screenshot tour and the whole-m
 | 1.4 | **Temporal core**: TAA with jittered projection and motion vectors, plus a temporal upscaler (render at 67–100%) | No jagged edges on wires, railings or palm leaves; stable while moving |
 | 1.5 | **Quality system**: presets from Low to **Extreme**, auto-detected; no frame cap (up to your monitor's refresh rate, e.g. 240 fps); optional dynamic resolution; crash-safe start (already done in v2) | Holds 240 fps on 'High' on a strong PC |
 
+**Status (engine core started):** `src/engine/`, test pages `dev/core.html` (a 600 m test district with 370+ lamps)
+and `dev/sky.html`.
+- 1.1 done: `WebGPURenderer` on WebGPU or WebGL 2 (`?backend=webgl`); F3 shows the backend and the GPU. The test
+  district renders the same on both.
+- 1.2 done: lux, candela and nits throughout; pre-exposed half-float buffers; EV100 metered on the GPU with eye
+  adaptation and a key that darkens dim scenes (noon, dusk and night checked by screenshot); a physically based sky
+  (Hillaire 2020 LUTs) with sun, moon, twilight and city glow, lighting the scene through an environment map.
+- 1.3 done: depth pre-pass with normals, roughness and motion vectors; its depth is copied into the lit pass for
+  early-z; GTAO on indirect light; clustered forward+ lighting on WebGPU (WebGL 2 shades the 16 nearest lamps);
+  a lamp pool that maps any number of lamps onto a fixed set of lights (no shader recompiles as you move).
+- 1.4 done: TAAU (three.js) at 67–100% render scale per preset, up to 200% with `?scale=`.
+- 1.5 done: Low to Extreme; no frame cap; optional cap (`L`: 60/120/144/165/240); fixed 120 Hz simulation; dynamic
+  resolution (`Y`, needs GPU timing); F3 frame-time graph with 1% lows, CPU and GPU time (18.3, 18.4 in part).
+- Still to confirm on real hardware: the frame-time targets (your F3 numbers on the test district).
+
 ### Step 2. Streaming and memory core
 | # | Work | Done when |
 |---|---|---|
