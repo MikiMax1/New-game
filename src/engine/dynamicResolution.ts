@@ -69,6 +69,10 @@ export class DynamicResolution {
 }
 
 function clampQuantize(s: number, min: number, max: number): number {
+  // The range's end points may fall between steps (a 0.67 preset scale): rounding them would
+  // move the scale off the end point on every update and make it flip back and forth.
+  if (s >= max) return max;
+  if (s <= min) return min;
   const q = Math.round(s / SCALE_STEP) * SCALE_STEP;
   return Math.round(Math.min(max, Math.max(min, q)) * 1000) / 1000;
 }
