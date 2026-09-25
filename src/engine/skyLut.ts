@@ -220,6 +220,28 @@ function inscatter(luts: LutNodes, r: F, dir: V3, tMax: F, lights: Light[], step
   return { L, T };
 }
 
+/**
+ * Mean density exp(-h / H) along a straight segment between altitudes h0 and h1 (km): exact
+ * for a flat ground, with the level-segment limit where the two altitudes nearly match.
+ */
+function layerDensity(h0: F, h1: F, scaleHeight: number): F {
+  const a = h1.sub(h0).div(scaleHeight);
+  const level = abs(a).lessThan(1e-4);
+  const mean = float(1).sub(exp(a.negate())).div(select(level, float(1), a));
+  return exp(h0.div(-scaleHeight)).mul(select(level, float(1).sub(a.mul(0.5)), mean));
+}
+
+/**
+ * Transmittance of the air near the ground over `km` kilometres between altitudes h0 and h1
+ * (km), Rayleigh plus aerosols; `haze` scales the aerosol density (1 = a humid Miami day).
+ * Used for aerial perspective and for the haze in front of clouds.
+ */
+export function airTransmittance(h0: F, h1: F, km: F, haze: F): V3 {
+  const rayleigh = vec3(...A.rayleighScattering).mul(km).mul(layerDensity(h0, h1, A.rayleighScaleHeight));
+  const mie = km.mul(A.mieExtinction).mul(haze).mul(layerDensity(h0, h1, A.mieScaleHeight));
+  return exp(rayleigh.add(mie).negate());
+}
+
 // --- Passes -------------------------------------------------------------------------------------
 
 function transmittancePass(): Node<'vec4'> {
@@ -480,6 +502,16 @@ export class SkyLuts {
   /** Transmittance from the viewer toward a world direction (zero below the horizon). */
   viewTransmittance(dir: V3): V3 {
     return transmittanceTo(texture(this.transmittance.texture), this.params.radius, dir.y);
+  }
+
+  /** Transmittance to space from radius r (km) toward zenith cosine mu (zero when it hits the ground). */
+  transmittanceFrom(r: F, mu: F): V3 {
+    return transmittanceTo(texture(this.transmittance.texture), r, mu);
+  }
+
+  /** Skylight on flat ground per lux of light at the top of the atmosphere, for a light zenith cosine. */
+  skylight(mu: F): V3 {
+    return skyIrradiance(texture(this.irradiance.texture), mu);
   }
 
   dispose(): void {

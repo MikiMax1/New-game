@@ -5,7 +5,8 @@
 //   dev/core.html?time=18.5&spot=street
 // Parameters: time (solar hours), spot (plaza|street|wires|overview|fan), cam=x,y,z&look=x,y,z,
 // backend=webgpu|webgl, quality=low|medium|high|ultra|extreme, scale (3D render scale, 0.25–2),
-// taa=0, ao=0, bloom=0, fps (frame-rate cap), dynres=1, frames (frames before a capture).
+// taa=0, ao=0, bloom=0, fps (frame-rate cap), dynres=1, frames (frames before a capture),
+// haze (aerosol density multiplier, 1 = a typical humid day), clouds (afternoon cumulus cover 0..1).
 import * as THREE from 'three';
 import '../src/style.css';
 import { isCapture, paramNum, paramNums, paramStr } from '../src/core/params';
@@ -31,9 +32,16 @@ await setStage('Building the sky', 0.3);
 const sky = new PhysicalSky(engine.renderer);
 sky.timeOfDay = paramNum('time', 16.5);
 scene.add(sky.mesh);
+scene.fogNode = sky.fogNode();
+sky.haze.value = paramNum('haze', 1);
 const daylight = new Daylight(scene, sky, engine.lights);
 daylight.setQuality(engine.quality);
-engine.onQualityChange((q) => daylight.setQuality(q));
+sky.setQuality(engine.quality.name);
+sky.clouds.cover = paramNum('clouds', 0.3);
+engine.onQualityChange((q) => {
+  daylight.setQuality(q);
+  sky.setQuality(q.name);
+});
 engine.onExposure((e) => daylight.applyExposure(e));
 
 await setStage('Building the test district', 0.5);

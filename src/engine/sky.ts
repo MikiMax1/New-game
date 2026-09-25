@@ -9,7 +9,32 @@
 // Night: the moonlit atmosphere plus the city's warm light pollution (strongest at the horizon)
 // and airglow, so the sky is dark but never black.
 import { BackSide, Color, Mesh, Scene, SphereGeometry, Vector3, Vector4, type PerspectiveCamera, type Texture } from 'three';
-import { Fn, cross, dot, float, fwidth, int, length, max, min, normalize, positionLocal, pow, screenCoordinate, smoothstep, sqrt, step, uniform, uniformArray, vec3, vec4 } from 'three/tsl';
+import {
+  Fn,
+  cameraPosition,
+  clamp,
+  cross,
+  dot,
+  float,
+  fwidth,
+  int,
+  length,
+  max,
+  min,
+  normalize,
+  output,
+  positionLocal,
+  positionWorld,
+  pow,
+  screenCoordinate,
+  smoothstep,
+  sqrt,
+  step,
+  uniform,
+  uniformArray,
+  vec3,
+  vec4,
+} from 'three/tsl';
 import { FloatType, MeshBasicNodeMaterial, NodeMaterial, PMREMGenerator, QuadMesh, RenderTarget, type Node, type WebGPURenderer } from 'three/webgpu';
 import { DEFAULT_DAY_OF_YEAR, moonPosition, sunPosition } from '../render/atmosphere/ephemeris';
 import {
@@ -23,7 +48,8 @@ import {
   type RGB,
 } from '../render/atmosphere/model';
 import { LATITUDE } from '../world/config';
-import { SkyLuts } from './skyLut';
+import { CloudLayer, cloudSettings } from './clouds';
+import { SkyLuts, airTransmittance } from './skyLut';
 import { exposureNode } from './units';
 
 type V3 = Node<'vec3'>;
@@ -117,6 +143,11 @@ export class PhysicalSky {
   moonElongation: number;
   /** Sky sphere for the main view; add it to the scene. Outputs nits × exposureNode. */
   readonly mesh: Mesh;
+  /**
+   * Multiplier of the aerosol (haze) density near the ground for aerial perspective: 1 is a
+   * typical humid South-Florida day (~30 km visibility), 3 a hazy one, 0.4 after a front.
+   */
+  readonly haze = uniform(1);
   /** Unit vectors toward the sun and moon (apparent positions, refraction included). */
   readonly sunDirection = new Vector3(0, 1, 0);
   readonly moonDirection = new Vector3(0, -1, 0);
@@ -125,6 +156,11 @@ export class PhysicalSky {
   readonly moonColor = new Color(1, 1, 1);
 
   private readonly luts = new SkyLuts();
+  /** Volumetric cumulus; `clouds.cover` sets the afternoon cover (0..1). */
+  readonly clouds: CloudLayer;
+  private cloudDivisor = cloudSettings('high').divisor;
+  private lastUpdate = -1;
+  private envCover = -1;
   /** Radiance unit of the sky-view LUT (nits). */
   private readonly lutScale = uniform(1);
   private readonly domeSun = uniform(new Vector3(0, 1, 0));
@@ -173,6 +209,7 @@ export class PhysicalSky {
     this.latitude = options.latitude ?? LATITUDE;
     this.moonElongation = options.moonElongation ?? 168;
 
+    this.clouds = new CloudLayer(this.luts, this.haze);
     this.mesh = new Mesh(new SphereGeometry(1, 48, 24), this.createDomeMaterial());
     this.mesh.name = 'Sky';
     this.mesh.frustumCulled = false;
@@ -184,7 +221,10 @@ export class PhysicalSky {
     const envMaterial = new MeshBasicNodeMaterial({ side: BackSide, depthWrite: false, depthTest: false, fog: false });
     envMaterial.name = 'Sky.Environment';
     envMaterial.lights = false;
-    envMaterial.colorNode = this.luts.sample(normalize(positionLocal));
+    // A few coarse cloud steps: enough for the clouds to dim and colour the image-based light.
+    const envDir = normalize(positionLocal);
+    const envClouds = this.clouds.layer(envDir, this.clouds.origin, 12, float(0.5), float(0.03));
+    envMaterial.colorNode = this.luts.sample(envDir).mul(float(1).sub(envClouds.a)).add(envClouds.rgb);
     this.envMesh = new Mesh(new SphereGeometry(10, 32, 16), envMaterial);
     this.envMesh.frustumCulled = false;
     this.envScene.add(this.envMesh);
@@ -268,6 +308,11 @@ export class PhysicalSky {
 
     if (this.lutStale(altitudeKm)) this.renderSkyView(altitudeKm, moonTop);
 
+    const now = performance.now();
+    const dt = this.lastUpdate < 0 ? 0 : Math.min(0.25, (now - this.lastUpdate) / 1000);
+    this.lastUpdate = now;
+    this.clouds.update(this.renderer, camera, hours, dt, this.cloudDivisor, this.sunDirection, this.moonDirection, moonTop / MOON_FULL_LUX, this.lutScale.value);
+
     this.domeSun.value.copy(this.sunDirection);
     this.domeMoon.value.copy(this.moonDirection);
     // The lit part's luminance: the phase law dims the whole moon faster than its lit fraction shrinks.
@@ -278,6 +323,32 @@ export class PhysicalSky {
     this.mesh.scale.setScalar(camera.far * DOME_FAR_FRACTION);
 
     if (this.environmentStale()) this.renderEnvironment();
+  }
+
+  /**
+   * Aerial perspective for `scene.fogNode`: every surface is dimmed by the air between it and
+   * the camera and the light that air scatters toward the camera is added, from the same
+   * atmosphere as the sky, so distant towers fade into the sky's own colour (bluish by day,
+   * orange toward a low sun, dark at night). Optical depth is integrated analytically for
+   * exponential Rayleigh and aerosol layers over a flat ground; the in-scattered light is the
+   * sky's radiance toward the view direction scaled by the share of that direction's optical
+   * depth to space which lies in front of the surface.
+   */
+  fogNode(): Node<'vec4'> {
+    return Fn(() => {
+      const toSurface = positionWorld.sub(cameraPosition);
+      const km = length(toSurface).mul(0.001);
+      const dir = toSurface.div(max(length(toSurface), 1e-4));
+      const h0 = max(cameraPosition.y, 0).mul(0.001);
+      const h1 = max(positionWorld.y, 0).mul(0.001);
+      const transmittance = airTransmittance(h0, h1, km, this.haze).toVar();
+      // Surfaces below the horizon scatter like the air along the horizon in that direction.
+      const skyDir = normalize(vec3(dir.x, max(dir.y, 0.02), dir.z)).toVar();
+      const toSpace = this.luts.viewTransmittance(skyDir);
+      const share = clamp(vec3(1).sub(transmittance).div(max(vec3(1).sub(toSpace), vec3(1e-3))), 0, 1);
+      const inscatter = this.luts.sample(skyDir).mul(this.lutScale).mul(share);
+      return vec4(output.rgb.mul(transmittance).add(inscatter.mul(exposureNode)), output.a);
+    })();
   }
 
   /**
@@ -308,6 +379,13 @@ export class PhysicalSky {
     return out;
   }
 
+  /** Cloud raymarch steps and resolution for a quality preset (`low` … `extreme`). */
+  setQuality(quality: string): void {
+    const settings = cloudSettings(quality);
+    this.clouds.setSteps(settings.steps);
+    this.cloudDivisor = settings.divisor;
+  }
+
   dispose(): void {
     this.mesh.removeFromParent();
     this.mesh.geometry.dispose();
@@ -317,6 +395,7 @@ export class PhysicalSky {
     this.pmremTarget?.dispose();
     this.pmrem.dispose();
     this.luts.dispose();
+    this.clouds.dispose();
     (this.probeQuad?.material as NodeMaterial | undefined)?.dispose();
     this.probeTarget?.dispose();
   }
@@ -343,7 +422,10 @@ export class PhysicalSky {
     const moonDisc = this.moonRadiance.mul(discCoverage(moonX, moonCos)).mul(lit);
 
     const sky: V3 = this.luts.sample(dir).mul(this.lutScale);
-    const radiance = sky.add(sunDisc.add(moonDisc).mul(toSpace));
+    // Clouds in front of the sky, sun and moon (premultiplied, in LUT units).
+    const clouds = this.clouds.sample();
+    const behind = sky.add(sunDisc.add(moonDisc).mul(toSpace));
+    const radiance = behind.mul(float(1).sub(clouds.a)).add(clouds.rgb.mul(this.lutScale));
     // Pre-exposed; the sun is scaled down (hue kept) to stay inside half-float range.
     const exposed = radiance.mul(exposureNode);
     const peak = max(max(exposed.r, exposed.g), exposed.b);
@@ -400,7 +482,10 @@ export class PhysicalSky {
       this.envSun.dot(this.sunDirection) < (twilight ? ENV_SUN_COS_TWILIGHT : ENV_SUN_COS) ||
       this.envMoon.dot(this.moonDirection) < ENV_MOON_COS ||
       Math.abs(this._nightFactor - this.envNight) > 0.05 ||
-      Math.abs(this.lutAltitude - this.envAltitude) > Math.max(0.05, 0.5 * this.envAltitude)
+      Math.abs(this.lutAltitude - this.envAltitude) > Math.max(0.05, 0.5 * this.envAltitude) ||
+      Math.abs(this.clouds.cover - this.envCover) > 0.01 ||
+      // Drifting clouds change the sky's light slowly.
+      (this.clouds.active && performance.now() - this.envTime > 10000)
     );
   }
 
@@ -414,6 +499,7 @@ export class PhysicalSky {
     this.envNight = this._nightFactor;
     this.envAltitude = this.lutAltitude;
     this.envTime = performance.now();
+    this.envCover = this.clouds.cover;
     this._environmentUpdates++;
   }
 }
