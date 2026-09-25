@@ -1,0 +1,121 @@
+{
+  "comment": "Assets fetched by tools/assets/fetch.mjs into public/content/. Poly Haven assets are CC0; others list their licence.",
+  "hdris": [
+    {
+      "id": "wide_street_01",
+      "res": "4k",
+      "use": "midday city street (default showcase lighting)"
+    },
+    {
+      "id": "venice_sunset",
+      "res": "2k",
+      "use": "golden hour"
+    },
+    {
+      "id": "shanghai_bund",
+      "res": "2k",
+      "use": "night city"
+    }
+  ],
+  "textures": [
+    {
+      "id": "asphalt_02",
+      "res": "2k",
+      "use": "road"
+    },
+    {
+      "id": "concrete_pavement",
+      "res": "2k",
+      "use": "sidewalk"
+    },
+    {
+      "id": "concrete_floor_02",
+      "res": "2k",
+      "use": "curbs and smooth concrete"
+    },
+    {
+      "id": "painted_plaster_wall",
+      "res": "2k",
+      "use": "stucco walls"
+    }
+  ],
+  "models": [
+    {
+      "id": "modular_urban_apartments_facade",
+      "res": "2k",
+      "keep": true
+    },
+    {
+      "id": "modular_fire_escape",
+      "res": "2k",
+      "keep": true
+    },
+    {
+      "id": "rollershutter_door",
+      "res": "2k"
+    },
+    {
+      "id": "rollershutter_window_01",
+      "res": "2k"
+    },
+    {
+      "id": "exterior_aircon_unit",
+      "res": "2k"
+    },
+    {
+      "id": "street_lamp_01",
+      "res": "2k"
+    },
+    {
+      "id": "fire_hydrant",
+      "res": "2k"
+    },
+    {
+      "id": "metal_trash_can",
+      "res": "2k"
+    },
+    {
+      "id": "utility_box_01",
+      "res": "2k"
+    },
+    {
+      "id": "water_manhole_cover",
+      "res": "2k"
+    },
+    {
+      "id": "concrete_road_barrier",
+      "res": "2k"
+    },
+    {
+      "id": "modular_street_seating",
+      "res": "2k",
+      "keep": true
+    },
+    {
+      "id": "island_tree_01",
+      "res": "2k"
+    },
+    {
+      "id": "shrub_01",
+      "res": "2k"
+    },
+    {
+      "id": "potted_plant_01",
+      "res": "2k"
+    },
+    {
+      "id": "covered_car",
+      "res": "2k"
+    }
+  ],
+  "files": [
+    {
+      "id": "car_concept",
+      "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CarConcept/glTF-Binary/CarConcept.glb",
+      "path": "models/car_concept/car_concept.glb",
+      "credit": "Car Concept by Eric Chadwick, \u00a9 2024 Darmstadt Graphics Group GmbH, from a public-domain model by Unity Fan; Khronos glTF Sample Assets",
+      "license": "CC-BY-4.0",
+      "source": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept"
+    }
+  ]
+}
