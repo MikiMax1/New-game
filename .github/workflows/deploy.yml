@@ -26,6 +26,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The showcase's photographic assets (Poly Haven CC0, Khronos CC-BY) are downloaded, not
+      # committed; cache them between deploys.
+      - uses: actions/cache@v4
+        with:
+          path: public/content
+          key: assets-${{ hashFiles('tools/assets/manifest.json', 'tools/assets/fetch.mjs') }}
+      - run: npm run assets
       - run: npx vite build
       - uses: actions/upload-pages-artifact@v3
         with:

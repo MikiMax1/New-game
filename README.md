@@ -51,6 +51,25 @@ older WebGL renderer until the world moves over.
 - **Loop:** no frame cap by default (your monitor's refresh rate), an optional cap, simulation at a fixed 120 Hz,
   optional dynamic resolution, and an `F3` panel with a frame-time graph, 1% lows, CPU and GPU times.
 
+## Photoreal showcase
+
+`showcase.html` is a rain-soaked street corner built only from photo-scanned assets, to develop the look the city
+is heading for. Code is in `src/graphics/`.
+
+- **Assets:** high-poly glTF models and 2K scanned PBR texture sets from Poly Haven (CC0), and the Khronos Car Concept
+  (CC-BY 4.0). They are downloaded, not committed:
+  - `npm run assets` fetches about 370 MB and optimises it to about 140 MB in `public/content/`.
+  - Credits are written to `public/content/CREDITS.md`.
+- **Lighting:** a photographed HDR sky for image-based light and reflections. The sun is found in the HDRI and moved
+  into a shadow-casting light (4096² soft shadows), so shadows are sharp and the light matches the photo.
+- **Materials:** everything is `MeshPhysicalMaterial` (the node version), including:
+  - wet asphalt with puddles in the low spots of the scan;
+  - metallic car paint under a clear coat;
+  - tinted glass.
+- **Camera:** GTAO, screen-space reflections, temporal anti-aliasing, bokeh depth of field, bloom, chromatic
+  aberration, a lens vignette, a colour grade and ACES filmic tone mapping.
+- **Screenshot:** `npm run capture-screenshot` renders the scene headless into `docs/screens/showcase/street.png`.
+
 ## Development
 
 ```bash
