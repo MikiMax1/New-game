@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Quality } from '../../core/quality';
+import { atLeast, type Quality } from '../../core/quality';
 import { LATITUDE } from '../../world/config';
 import type { Environment } from '../basicEnvironment';
 import { atmosphereUniform, installAtmosphereChunks, registerMaterial, registerObject } from './chunks';
@@ -86,7 +86,7 @@ function cloudStepsFor(q: Quality): number {
 
 /** Cloud pass resolution divisor. */
 function cloudDivisorFor(q: Quality): number {
-  return q.name === 'low' ? 4 : q.name === 'medium' ? 3 : 2;
+  return q.name === 'low' ? 4 : q.name === 'medium' ? 3 : q.name === 'extreme' ? 1 : 2;
 }
 
 const ENV_CLOUD_STEPS = 18;
@@ -100,7 +100,7 @@ export function diurnalCumulus(hours: number): number {
 }
 
 function envSizeFor(q: Quality): number {
-  return q.name === 'low' ? 64 : q.name === 'ultra' ? 256 : 128;
+  return q.name === 'low' ? 64 : atLeast(q, 'ultra') ? 256 : 128;
 }
 
 /**

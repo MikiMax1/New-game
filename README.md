@@ -15,7 +15,7 @@ npm run dev        # then open the printed URL
   `1`–`9` jump between photo spots, `[` `]` change the time of day (hold `T` to fast-forward), `O` cycles quality,
   `F3` shows performance stats, `F2` saves a screenshot.
 - `map.html`: the generated 2D map (drag to pan, scroll to zoom).
-- URL parameters: `?seed=2` (a different city), `?spot=downtown`, `?time=18.5`, `?quality=low|medium|high|ultra`,
+- URL parameters: `?seed=2` (a different city), `?spot=downtown`, `?time=18.5`, `?quality=low|medium|high|ultra|extreme`,
   `?cam=x,y,z&look=x,y,z`.
 
 ## What exists so far
