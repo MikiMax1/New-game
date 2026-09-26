@@ -10,7 +10,8 @@ namespace Solmar
         const string Text =
             "Fly: hold right mouse + W A S D, Q/E down/up, Shift faster\n" +
             "F: walk / fly   (walking: click to look, Esc frees the mouse, Shift runs)\n" +
-            "[ ]: time of day   hold T: fast-forward\n" +
+            "G: get in / out of the car (W S drive, A D steer, Space handbrake, V camera)\n" +
+            "[ ]: time of day   hold T: fast-forward (lamps and windows light up at night)\n" +
             "F2: screenshot   F3: performance   F5: quality preset   F6: fps cap\n" +
             "H: hide this help";
 
@@ -35,7 +36,7 @@ namespace Solmar
         {
             if (!pinned && shownFor <= 0f) return;
             style ??= new GUIStyle(GUI.skin.label) { fontSize = 16 };
-            const float w = 640f, h = 112f;
+            const float w = 640f, h = 150f;
             var rect = new Rect(16f, Screen.height - h - 16f, w, h);
             GUI.color = new Color(0f, 0f, 0f, 0.55f);
             GUI.DrawTexture(new Rect(rect.x - 8f, rect.y - 6f, w + 16f, h + 8f), Texture2D.whiteTexture);
