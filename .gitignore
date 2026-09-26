@@ -6,5 +6,3 @@ playwright-report/
 *.log
 .DS_Store
 .claude/worktrees/
-# Photographic assets, downloaded by `npm run assets` (tools/assets/fetch.mjs)
-public/content/

@@ -12,11 +12,14 @@
 //   bloom      UnrealBloom-style glare (strength 0.15, radius 0.4, threshold 0.85)
 //   lens       chromatic aberration and vignetting (cos⁴ fall-off of a real lens, plus a touch more)
 //   grade      Unreal-style colour grading in scene-linear light: white balance, contrast about
-//              18% grey, saturation, split toning; then ACES filmic tone mapping (exposure 1.15)
-//              and sRGB output, dithered against banding
+//              18% grey, saturation, split toning; then ACES filmic tone mapping (the renderer's
+//              exposure) and sRGB output
+//   grain      sensor noise after the tone curve, strongest in the mid-tones, new every frame;
+//              it also dithers away banding in 8-bit gradients
 import {
   builtinAOContext,
   dot,
+  hash,
   float,
   interleavedGradientNoise,
   luminance,
@@ -27,12 +30,14 @@ import {
   output,
   packNormalToRGB,
   pass,
+  positionViewDirection,
   renderOutput,
   roughness,
   sample,
   screenCoordinate,
   screenUV,
   smoothstep,
+  time,
   uniform,
   unpackRGBToNormal,
   vec2,
@@ -43,6 +48,7 @@ import {
 import {
   RenderPipeline,
   UnsignedByteType,
+  type NodeMaterial,
   Vector2,
   Vector3,
   type Node,
@@ -90,16 +96,34 @@ export interface Grade {
   vignette: Uniform<'float'>;
   /** Chromatic aberration strength (0 = none). */
   chromaticAberration: Uniform<'float'>;
+  /** Film grain amplitude in display values (0 = none). */
+  grain: Uniform<'float'>;
+}
+
+/**
+ * Marks a material as reflective for the screen-space reflection pass: `weight` is the share of
+ * light it reflects at this view angle (0 = none; e.g. the Fresnel term of water or lacquer),
+ * `roughness` how blurry its reflection is. Written into the pre-pass's `reflect` target; by
+ * default that target holds metalness and roughness, so metals reflect without this.
+ */
+export function markReflective(material: NodeMaterial, weight: Node<'float'>, roughness: Node<'float'>): void {
+  material.mrtNode = mrt({ reflect: vec2(weight, roughness) });
+}
+
+/** Fresnel reflectance of a dielectric surface (F0 = 0.02 water … 0.04 glass) along the view. */
+export function fresnel(normal: Node<'vec3'>, f0 = 0.04): Node<'float'> {
+  const f = float(1).sub(normal.dot(positionViewDirection).clamp(0, 1));
+  return f.pow(5).mul(1 - f0).add(f0);
 }
 
 export class PostProcessing {
   readonly pipeline: RenderPipeline;
   /** Distance to the plane in focus, metres. */
-  readonly focusDistance = uniform(8);
+  readonly focusDistance = uniform(20);
   /** Distance from the focal plane at which things are fully out of focus, metres. */
-  readonly focusRange = uniform(24);
+  readonly focusRange = uniform(90);
   /** Largest blur, in pixels at 1080p. */
-  readonly bokehScale = uniform(2.2);
+  readonly bokehScale = uniform(1.6);
   readonly grade: Grade = {
     temperature: uniform(0.35),
     tint: uniform(0.05),
@@ -109,6 +133,7 @@ export class PostProcessing {
     highlights: uniform(new Vector3(1.03, 1.0, 0.96)),
     vignette: uniform(0.22),
     chromaticAberration: uniform(0.12),
+    grain: uniform(0.022),
   };
   readonly aoNode: GTAONode | null = null;
   readonly ssrNode: SSRNode | null = null;
@@ -195,11 +220,14 @@ export class PostProcessing {
 
     if (settings.grade) color = vec4(this.colorGrade(color.rgb), 1);
 
-    // ACES filmic tone mapping (renderer.toneMappingExposure) and sRGB, then ±½ LSB of noise so
-    // gradients in the sky don't band in 8 bits.
+    // ACES filmic tone mapping (renderer.toneMappingExposure) and sRGB, then grain: film/sensor
+    // noise, strongest in the mid-tones (none in pure black or white), different every frame.
     const display = renderOutput(color);
-    const dither = interleavedGradientNoise(screenCoordinate.xy).sub(0.5).div(255);
-    this.pipeline.outputNode = vec4(display.rgb.add(dither), 1);
+    const lum = luminance(display.rgb);
+    const midtones = lum.mul(float(1).sub(lum)).mul(4).add(0.15);
+    const seed = screenCoordinate.xy.add(time.mul(vec2(97.13, 61.7)).fract().mul(1000));
+    const noise = hash(seed.x.add(seed.y.mul(4096)).add(interleavedGradientNoise(screenCoordinate.xy))).sub(0.5);
+    this.pipeline.outputNode = vec4(display.rgb.add(noise.mul(this.grade.grain).mul(midtones)), 1);
   }
 
   /** Focuses on a point in the world. */

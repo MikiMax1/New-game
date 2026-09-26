@@ -11,7 +11,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "shoot": "node tools/shoot.mjs",
-    "assets": "node tools/assets/fetch.mjs",
     "capture-screenshot": "node tools/shoot.mjs showcase.html docs/screens/showcase/street.png --size 1600x900 --timeout 900"
   },
   "dependencies": {

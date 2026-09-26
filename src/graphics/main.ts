@@ -1,24 +1,27 @@
-// Photoreal showcase: the graphics pipeline on a rain-soaked street corner, built only from
-// loaded photo-scanned assets. showcase.html runs it.
+// Procedural photoreal showcase: a downtown street at golden hour after rain, with no external
+// assets at all. Every mesh, texture, the sky and the image-based light are generated at runtime.
+// showcase.html runs it.
 //
-//   WebGPURenderer (WebGL 2 fallback), ACES filmic tone mapping at exposure 1.15, sRGB output
-//   HDRI image-based lighting with the sun extracted into a 4096² shadow-casting light
-//   GTAO, SSR, TRAA, bokeh DoF, bloom, chromatic aberration, vignette, colour grade
+//   WebGPURenderer (WebGL 2 fallback), ACES filmic tone mapping at exposure 1.2, sRGB output
+//   procedural sky (Preetham) → float cube map → PMREM image-based light, street reflection probe
+//   2048² PBR textures baked on the GPU from simplex, fBm and Worley noise
+//   GTAO, SSR, TRAA, bokeh DoF, bloom, chromatic aberration, vignette, grade, film grain
 //
-// URL parameters: hdri (wide_street_01 | venice_sunset | shanghai_bund), rot (HDRI rotation,
-// degrees), env (HDRI intensity), cam=x,y,z & look=x,y,z, fov, color (car paint, hex without #),
-// backend=webgpu|webgl, scale (render scale), frames (frames before a capture), debug=1 (logs
-// model bounds), and ao/ssr/taa/dof/bloom/lens/grade=0 to switch a pass off.
+// URL parameters: spot (hero | crossing | puddle | facades), cam=x,y,z & look=x,y,z, fov,
+// sun=elevation,azimuth (degrees), clouds (0..1), turbidity, textures=0 (flat colours),
+// texsize (texture resolution, default 2048), probe=0 (sky-only reflections), backend=webgpu|webgl,
+// scale (render scale), frames (frames before a capture), and ao/ssr/taa/dof/bloom/lens/grade=0.
 import { ACESFilmicToneMapping, PerspectiveCamera, Scene, SRGBColorSpace, Vector3 } from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import '../style.css';
 import { isCapture, paramBool, paramNum, paramNums, paramStr } from '../core/params';
 import { createRenderer, isBackendChoice } from '../engine/renderer';
-import { AssetLoader, MissingAssetsError } from './AssetLoader';
-import { LightingManager } from './LightingManager';
-import { MaterialLibrary } from './MaterialLibrary';
+import { flatCityMaterials, texturedCityMaterials } from './city/CityMaterials';
+import { pavementMaterial, roadMaterial } from './city/StreetMaterials';
 import { DEFAULT_POST, PostProcessing, type PostSettings } from './PostProcessing';
-import { buildStreetScene } from './StreetScene';
+import { buildCity } from './ProceduralCity';
+import { ProceduralLighting } from './ProceduralLighting';
+import { ProceduralTextureEngine } from './ProceduralTextureEngine';
 
 declare global {
   interface Window {
@@ -31,74 +34,97 @@ declare global {
 const container = document.getElementById('app')!;
 const loadingText = document.getElementById('loading-text')!;
 const loadingBar = document.getElementById('loading-bar')!;
-const stage = (text: string, f?: number) => {
-  loadingText.textContent = text;
-  if (f !== undefined) loadingBar.style.width = `${Math.round(f * 100)}%`;
-};
-
 const t0 = performance.now();
 const log = (what: string) => console.info(`[${((performance.now() - t0) / 1000).toFixed(1)}s] ${what}`);
+const stage = async (text: string, f: number) => {
+  loadingText.textContent = text;
+  loadingBar.style.width = `${Math.round(f * 100)}%`;
+  log(text);
+  // Let the loading screen paint before the next long step.
+  await new Promise((r) => setTimeout(r, 20));
+};
 
 async function main(): Promise<void> {
-  stage('Starting the renderer…', 0.02);
+  await stage('Starting the renderer…', 0.02);
   const choice = paramStr('backend', 'auto');
   const setup = await createRenderer(isBackendChoice(choice) ? choice : 'auto', (msg) => fail(`The GPU stopped responding (${msg}). Reload to try again.`));
   const { renderer } = setup;
   renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.2;
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio) * paramNum('scale', 1));
   container.appendChild(renderer.domElement);
 
   const scene = new Scene();
-  const camera = new PerspectiveCamera(paramNum('fov', 38), 1, 0.1, 600);
-  // A 35 mm lens at eye level beside the car.
-  const cam = paramNums('cam') ?? [-5.6, 1.25, 4.4];
-  const look = paramNums('look') ?? [0.4, 0.75, -3.1];
-  camera.position.set(cam[0], cam[1], cam[2]);
+  const camera = new PerspectiveCamera(40, 1, 0.1, 5000);
 
-  const assets = await AssetLoader.create(renderer);
-  assets.onProgress((f) => stage('Loading photo-scanned assets…', 0.05 + f * 0.8));
+  await stage('Building the sky…', 0.1);
+  const sun = paramNums('sun');
+  const lighting = new ProceduralLighting(renderer, scene, sun?.length === 2 ? { elevation: sun[0], azimuth: sun[1] } : undefined, {
+    clouds: paramNum('clouds', 0.32),
+    turbidity: paramNum('turbidity', 3.2),
+  });
+  scene.fogNode = lighting.fogNode();
 
-  const lighting = new LightingManager(renderer, scene);
-  const materials = new MaterialLibrary();
-  const hdriId = paramStr('hdri', 'wide_street_01');
-  const [hdr, street] = await Promise.all([assets.hdri(hdriId), buildStreetScene(assets, materials, '#' + paramStr('color', '7d0d12'))]);
-  scene.add(street.root);
-  log('assets loaded and placed');
-  const sun = lighting.setEnvironment(hdr, { rotation: (paramNum('rot', 0) * Math.PI) / 180, intensity: paramNum('env', 1) });
-  lighting.fitShadow(street.shadowBounds);
-  if (sun) {
-    const elevation = (Math.asin(sun.direction.y) * 180) / Math.PI;
-    console.info(`sun: elevation ${elevation.toFixed(1)}°, illuminance ${sun.illuminance.toFixed(1)} (clamp ${sun.clampLevel.toFixed(2)}, ${sun.pixels} px)`);
-  } else {
-    console.info('sun: none found (overcast HDRI)');
+  // Materials: 2048² PBR textures generated on the GPU (or flat colours with ?textures=0).
+  let materials = flatCityMaterials();
+  let road = materials.asphalt;
+  let pavement = materials.pavement;
+  if (paramBool('textures', true)) {
+    const engine = new ProceduralTextureEngine(renderer, paramNum('texsize', 2048));
+    const sets = await engine.bakeAll((f, name) => stage(`Generating textures: ${name}…`, 0.15 + f * 0.35));
+    materials = texturedCityMaterials(sets);
+    road = roadMaterial(sets.asphalt);
+    pavement = pavementMaterial(sets.pavement);
   }
-  if (paramBool('debug')) {
-    for (const [id, b] of Object.entries(street.bounds)) {
-      const s = b.getSize(new Vector3());
-      console.info(`bounds ${id}: size ${s.x.toFixed(2)} × ${s.y.toFixed(2)} × ${s.z.toFixed(2)}  min ${b.min.x.toFixed(2)},${b.min.y.toFixed(2)},${b.min.z.toFixed(2)}`);
-    }
+
+  await stage('Building the city…', 0.55);
+  const city = buildCity(materials, { road, pavement });
+  scene.add(city.root);
+  lighting.fitShadow(city.shadowBounds);
+
+  await stage('Baking the sky light…', 0.7);
+  lighting.bakeSky();
+  if (paramBool('probe', true)) {
+    await stage('Baking the street reflection probe…', 0.75);
+    lighting.bakeProbe(city.probe);
   }
+  if (paramStr('debug', '') === 'env') {
+    // Shows the image-based light itself as the backdrop, with the city and sky hidden.
+    scene.background = scene.environment;
+    city.root.visible = false;
+    lighting.sky.visible = false;
+  }
+
+  // Camera: a named spot, or cam/look from the URL.
+  const spot = city.spots[paramStr('spot', 'hero')] ?? city.spots.hero;
+  const cam = paramNums('cam');
+  const look = paramNums('look');
+  camera.position.copy(cam?.length === 3 ? new Vector3(cam[0], cam[1], cam[2]) : spot.position);
+  const target = look?.length === 3 ? new Vector3(look[0], look[1], look[2]) : spot.target.clone();
+  camera.fov = paramNum('fov', spot.fov);
 
   const settings: PostSettings = { ...DEFAULT_POST };
   for (const key of ['ao', 'ssr', 'taa', 'dof', 'bloom', 'lens', 'grade'] as const) settings[key] = paramBool(key, true);
   const post = new PostProcessing(renderer, scene, camera, settings);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(look[0], look[1], look[2]);
+  controls.target.copy(target);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
-  controls.minDistance = 1.5;
-  controls.maxDistance = 40;
-  // Stay above the street.
-  controls.maxPolarAngle = Math.PI * 0.495;
+  controls.minDistance = 0.5;
+  controls.maxDistance = 200;
+  controls.maxPolarAngle = Math.PI * 0.497;
   controls.update();
 
-  const focusTarget = new Vector3();
-  const updateFocus = () => post.focusOn(controls.target.lengthSq() > 0 ? focusTarget.copy(controls.target) : street.car.position);
+  // Focus: where the camera looks, but no further than the subject of a street-level shot.
+  const focus = new Vector3();
+  const updateFocus = () => {
+    const d = Math.min(camera.position.distanceTo(controls.target), 25);
+    focus.copy(controls.target).sub(camera.position).setLength(d).add(camera.position);
+    post.focusOn(focus);
+  };
 
-  // Resize with the element, not just the window (split views, devtools, rotating phones).
   const resize = () => {
     const w = Math.max(1, container.clientWidth);
     const h = Math.max(1, container.clientHeight);
@@ -111,11 +137,10 @@ async function main(): Promise<void> {
   new ResizeObserver(resize).observe(container);
   resize();
 
-  stage('Compiling shaders…', 0.9);
+  await stage('Compiling shaders…', 0.9);
   await renderer.compileAsync(scene, camera);
-  log('shaders compiled');
 
-  window.__SHOWCASE = { renderer, scene, camera, post, lighting, materials, street, controls };
+  window.__SHOWCASE = { renderer, scene, camera, post, lighting, materials, city, controls };
   const captureFrames = paramNum('frames', 24);
   let frame = 0;
   const loading = document.getElementById('loading');
@@ -124,11 +149,11 @@ async function main(): Promise<void> {
     updateFocus();
     post.render();
     frame++;
+    if (frame === 1 || frame === captureFrames) log(`frame ${frame}`);
     if (frame === 2) {
       if (isCapture) loading?.remove();
       else loading?.classList.add('done');
     }
-    if (frame === 1 || frame === captureFrames) log(`frame ${frame}`);
     if (frame === captureFrames) {
       const info = renderer.info.render as { calls?: number; drawCalls?: number; triangles?: number };
       window.__STATS = { calls: info.calls ?? info.drawCalls ?? 0, triangles: info.triangles ?? 0, programs: 0 };
@@ -141,12 +166,12 @@ async function main(): Promise<void> {
 function addHint(backend: string): void {
   const el = document.createElement('div');
   el.className = 'hint';
-  el.innerHTML = `<b>Photoreal showcase</b> (${backend})<br>Drag to orbit &nbsp; wheel to zoom &nbsp; right-drag to pan`;
+  el.innerHTML = `<b>Procedural city</b> (${backend}): no external assets<br>Drag to orbit &nbsp; wheel to zoom &nbsp; right-drag to pan`;
   document.body.appendChild(el);
 }
 
 function fail(message: string): void {
-  stage(message);
+  loadingText.textContent = message;
   document.getElementById('loading')?.classList.remove('done');
   loadingBar.style.width = '0';
   window.__READY = true;
@@ -154,5 +179,5 @@ function fail(message: string): void {
 
 main().catch((e: unknown) => {
   console.error(e);
-  fail(e instanceof MissingAssetsError ? e.message : `Could not start: ${(e as Error).message}`);
+  fail(`Could not start: ${(e as Error).message}`);
 });
