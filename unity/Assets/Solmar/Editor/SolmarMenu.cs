@@ -46,7 +46,12 @@ namespace Solmar.EditorTools
             cityGo.SetActive(true);
 
             Camera cam = Atmosphere.CreateCamera(null, Spots[0].position, Spots[0].target);
+            // Fly (right mouse + WASD), F to walk at eye level, F2 for a screenshot.
             cam.gameObject.AddComponent<FreeCamera>();
+            cam.gameObject.AddComponent<PlayerWalker>();
+            cam.gameObject.AddComponent<ScreenshotKey>();
+            // [ and ] change the time of day, T fast-forwards.
+            new GameObject("Time of day").AddComponent<TimeOfDay>();
             // Extra camera spots as empty markers: select one and use GameObject > Align View to Selected.
             var spots = new GameObject("Camera spots");
             foreach ((string name, Vector3 position, Vector3 target) in Spots)

@@ -15,7 +15,8 @@ namespace Solmar
         float yaw;
         float pitch;
 
-        void Start()
+        // On enable rather than start: PlayerWalker hands the camera back here after walking.
+        void OnEnable()
         {
             Vector3 e = transform.eulerAngles;
             yaw = e.y;

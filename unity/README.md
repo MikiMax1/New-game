@@ -29,6 +29,13 @@ Scene view straight away.
 
 - **Scene view:** hold the right mouse button and use `W A S D`, with `Q`/`E` for down and up.
 - **Play mode:** press Play and use the same controls. `Shift` moves faster.
+  - `F` switches to walking at eye level. Click to capture the mouse, and use `W A S D` with
+    `Shift` to run. `Esc` releases the mouse; `F` again flies.
+  - `[` and `]` move the time of day by 15 minutes, and holding `T` fast-forwards. The day
+    starts at 18:16 on 26 September, with the sun low in the west-southwest.
+  - `F2` saves a screenshot to `unity/Screenshots/`.
+- **Screenshots to send:** **Solmar > Capture Spot Screenshots** saves a 1920×1080 PNG of every
+  camera spot to `unity/Screenshots/`.
 - **Camera spots:** under *Camera spots* there are *Hero*, *Crossing* and *Puddle*. Select one
   and choose **GameObject > Align View to Selected** to view it in the Scene view.
 - **Settings:** select *Solmar City* in the Hierarchy. You can change:
