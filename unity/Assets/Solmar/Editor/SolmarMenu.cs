@@ -50,6 +50,8 @@ namespace Solmar.EditorTools
             cam.gameObject.AddComponent<FreeCamera>();
             cam.gameObject.AddComponent<PlayerWalker>();
             cam.gameObject.AddComponent<ScreenshotKey>();
+            // Synthesised street sound: traffic, passing cars, wind in the palms, birds.
+            cam.gameObject.AddComponent<CityAmbience>();
             // [ and ] change the time of day, T fast-forwards.
             new GameObject("Time of day").AddComponent<TimeOfDay>();
             // Extra camera spots as empty markers: select one and use GameObject > Align View to Selected.

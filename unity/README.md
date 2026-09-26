@@ -72,6 +72,8 @@ Scene view straight away.
   - A 120,000 lux sun at 12° elevation, turned golden by the atmosphere.
   - 4096² PCSS shadows and contact shadows.
   - A realtime reflection probe covering the street.
+- **Sound:** synthesised live, with no audio files: distant traffic, cars passing across the
+  stereo field, gusts in the palms, birds and a faint city hum.
 - **Camera:**
   - A physical 35 mm camera with automatic exposure and ACES tone mapping.
   - SSR (also on glass), GTAO, bloom, depth of field, chromatic aberration, vignette, film grain
