@@ -26,18 +26,6 @@ namespace Solmar.Traffic
         const int FarUpdateSkip = 4;
         const int SpawnPerPass = 3;
 
-        static readonly Color[] Palette =
-        {
-            new Color(0.92f, 0.93f, 0.95f),
-            new Color(0.05f, 0.05f, 0.06f),
-            new Color(0.55f, 0.57f, 0.6f),
-            new Color(0.62f, 0.06f, 0.05f),
-            new Color(0.02f, 0.25f, 0.55f),
-            new Color(0.85f, 0.55f, 0.05f),
-            new Color(0.05f, 0.45f, 0.4f),
-            new Color(0.75f, 0.15f, 0.55f),
-        };
-
         readonly TrafficCar[] pool = new TrafficCar[MaxCars];
         Transform carsRoot;
         Transform focus;
@@ -110,13 +98,15 @@ namespace Solmar.Traffic
 
         void BuildPool()
         {
+            // A realistic mix of models and paints (mostly white, silver, grey and black).
+            var random = new Rng(0x7AF1C5u);
             for (int i = 0; i < MaxCars; i++)
             {
                 var go = new GameObject("Traffic car");
                 go.transform.SetParent(carsRoot, false);
                 var rb = go.AddComponent<Rigidbody>();
                 rb.isKinematic = true;
-                VehicleBody.WheelSlot[] slots = VehicleBody.Build(go.transform, Palette[i % Palette.Length]);
+                VehicleBody.WheelSlot[] slots = VehicleBody.Build(go.transform, VehicleBody.RandomPaint(random), VehicleBody.RandomModel(random));
                 var car = go.AddComponent<TrafficCar>();
                 car.Init(slots);
                 go.SetActive(false);
