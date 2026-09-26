@@ -9,11 +9,14 @@ namespace Solmar.City
     /// Parked cars in both parking lanes, modelled from real dimensions: a sedan, a hatchback, an
     /// SUV, a pickup and a taxi.
     ///
-    /// Each body is lofted from cross-sections (rounded rectangles) sampled every few centimetres
-    /// along the car, so the bonnet, the boot and the wheel arches are smooth curves. The cabin is a
-    /// second loft in tinted glass that narrows towards the roof, capped by a painted roof panel.
-    /// Wheels are lathed tyres with five-spoke rims. Local frame: x forward from the car's centre, y
-    /// up from the ground under the tyres, z to the left.
+    /// Each body is lofted from cross-sections along x, with flat-ish sides, a tucked-in rocker and a
+    /// crisp shoulder crease below the beltline rather than a single smooth superellipse, so the
+    /// panels read as pressed sheet metal instead of a blob. The glasshouse is built from separate
+    /// flat panes (windscreen, rear glass, one or two door windows per side) framed by A/B/C pillars
+    /// and a window-sill trim, capped by a painted roof panel. Wheels are lathed tyres and multi-spoke
+    /// rims with a brake disc and caliper behind, sat in arches lined with a dark liner so the tyre
+    /// and its sidewall are genuinely visible rather than hidden behind the bodywork. Local frame: x
+    /// forward from the car's centre, y up from the ground under the tyres, z to the left.
     ///
     /// Cars park 0.22 m from the kerb, facing the traffic in their lane (drive on the right), with
     /// 0.9 to 2.2 m between bumpers and the odd empty space. They keep clear of the crossing, the
@@ -40,6 +43,8 @@ namespace Solmar.City
             public float cabinTaper = 0.8f;
             public bool rearDoors = true;
             public bool taxiSign;
+            /// <summary>How far the fender bulges out around each wheel arch.</summary>
+            public float archFlare = 0.015f;
 
             public float Front => length / 2f;
             public float Rear => -length / 2f;
@@ -47,6 +52,10 @@ namespace Solmar.City
             public float RearAxle => FrontAxle - wheelbase;
             /// <summary>z of the wheel centres (the tyres' outer walls 3 cm inside the body).</summary>
             public float Track => width / 2f - 0.03f - wheelWidth / 2f;
+            /// <summary>Whether the cabin is long enough to read as a separate rear door and window.</summary>
+            public bool HasRearWindow => rearDoors && roofRear < windscreen - 1.6f;
+            /// <summary>x of the B-pillar, when there is one.</summary>
+            public float BPillarX => windscreen - 1.5f;
         }
 
         static readonly Style Sedan = new Style
@@ -68,6 +77,7 @@ namespace Solmar.City
             name = "SUV", length = 4.75f, width = 1.92f, sill = 0.32f, hood = 1.12f, deck = 1.18f, roof = 1.76f,
             windscreen = 0.95f, roofFront = 0.3f, roofRear = -1.95f, rearGlass = -2.15f,
             wheelRadius = 0.37f, wheelWidth = 0.245f, frontOverhang = 0.95f, wheelbase = 2.85f, cabinTaper = 0.84f,
+            archFlare = 0.03f,
         };
 
         static readonly Style Pickup = new Style
@@ -75,6 +85,7 @@ namespace Solmar.City
             name = "Pickup", length = 5.8f, width = 2.0f, sill = 0.38f, hood = 1.2f, deck = 1.22f, roof = 1.9f,
             windscreen = 1.35f, roofFront = 0.7f, roofRear = -0.35f, rearGlass = -0.45f,
             wheelRadius = 0.39f, wheelWidth = 0.265f, frontOverhang = 1.0f, wheelbase = 3.6f, cabinTaper = 0.86f,
+            archFlare = 0.032f,
         };
 
         static readonly Style Taxi = new Style
@@ -122,8 +133,13 @@ namespace Solmar.City
                 { "trim", m.Surface("Car trim", new Color(0.02f, 0.02f, 0.022f), 0.35f) },
                 { "tyre", m.Rubber },
                 { "rim", m.Surface("Car rim", new Color(0.55f, 0.56f, 0.58f), 0.75f, 1f) },
+                { "disc", m.Surface("Car brake disc", new Color(0.24f, 0.23f, 0.22f), 0.4f, 0.9f) },
+                { "caliper", m.Surface("Car brake caliper", new Color(0.3f, 0.05f, 0.04f), 0.5f) },
                 { "lamp", m.Surface("Car headlamp", new Color(0.7f, 0.72f, 0.75f), 0.95f, 0.8f) },
+                { "lens", m.TintedGlass("Car headlamp lens", new Color(0.85f, 0.85f, 0.85f), 0.4f) },
+                { "reflector", m.Surface("Car headlamp reflector", new Color(0.85f, 0.86f, 0.88f), 0.95f, 1f) },
                 { "tail", m.Surface("Car tail lamp", new Color(0.3f, 0.008f, 0.006f), 0.92f, 0f, 1f) },
+                { "grille", m.Surface("Car grille", new Color(0.03f, 0.03f, 0.032f), 0.55f, 0.4f) },
                 { "plate", m.Surface("Car plate", new Color(0.72f, 0.72f, 0.7f), 0.5f) },
                 { "sign", m.Surface("Taxi sign", new Color(0.8f, 0.78f, 0.7f), 0.6f) },
             };
@@ -137,7 +153,9 @@ namespace Solmar.City
                 (new Color(0.02f, 0.05f, 0.14f), 0.5f), (new Color(0.36f, 0.02f, 0.02f), 0f),
                 (new Color(0.42f, 0.36f, 0.26f), 0.6f), (new Color(0.05f, 0.2f, 0.2f), 0.3f),
             };
-            Material taxiYellow = m.Surface("Car paint taxi", new Color(0.8f, 0.52f, 0.02f), 0.88f, 0f, 1f);
+            (Color colour, float metallic) taxiSpec = (new Color(0.8f, 0.52f, 0.02f), 0f);
+            Material taxiYellow = m.Surface("Car paint taxi", taxiSpec.colour, 0.88f, 0f, 1f);
+            Material taxiSkirt = m.Surface("Car skirt taxi", taxiSpec.colour * 0.32f, 0.35f);
 
             int count = 0;
             foreach (int side in new[] { 1, -1 })
@@ -176,15 +194,21 @@ namespace Solmar.City
                         built = (mesh, a.Slots);
                         meshes.Add(s, built);
                     }
-                    Material paint;
-                    if (s.taxiSign) paint = taxiYellow;
+                    Material paint, skirt;
+                    if (s.taxiSign) { paint = taxiYellow; skirt = taxiSkirt; }
                     else
                     {
                         (Color colour, float metallic) p = paints[random.Range(0, paints.Length)];
                         paint = m.Surface("Car paint", p.colour, 0.88f, p.metallic, 1f);
+                        // A subtly darker, matte tint of the paint for the lower cladding and trim.
+                        skirt = m.Surface("Car skirt", p.colour * 0.32f, 0.35f);
                     }
                     var mats = new Material[built.slots.Count];
-                    for (int i = 0; i < mats.Length; i++) mats[i] = built.slots[i] == "paint" ? paint : shared[built.slots[i]];
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        string slot = built.slots[i];
+                        mats[i] = slot == "paint" ? paint : slot == "skirt" ? skirt : shared[slot];
+                    }
 
                     float cx = x + s.length / 2f;
                     float cz = side * (Layout.KerbZ - 0.22f - s.width / 2f - random.Range(0f, 0.12f));
@@ -235,41 +259,58 @@ namespace Solmar.City
 
         // ---- Body shape, as functions of x ----
 
-        /// <summary>Top of the lower body: bonnet, beltline and boot, with rounded nose and tail.</summary>
+        /// <summary>
+        /// A smoothed unit bump: 1 at `center`, easing to 0 over `halfBand` either side (a raised
+        /// cosine). Used to lay a shallow crease or tuck into an otherwise flat panel.
+        /// </summary>
+        static float Bell(float t, float center, float halfBand)
+        {
+            if (halfBand <= 1e-5f) return 0f;
+            float d = Mathf.Clamp01(Mathf.Abs(t - center) / halfBand);
+            return 0.5f * (1f + Mathf.Cos(d * Mathf.PI));
+        }
+
+        /// <summary>Top of the lower body: bonnet, beltline and boot, flat but for a crisp curve right at the nose and tail.</summary>
         static float BodyTop(Style s, float x)
         {
             if (x >= s.windscreen)
             {
-                float t = (s.Front - x) / (s.Front - s.windscreen);
-                float nose = s.hood - 0.13f;
-                return nose + (s.hood - nose) * Mathf.Sqrt(Mathf.Clamp01(t));
+                float t = Mathf.Clamp01((s.Front - x) / Mathf.Max(0.05f, s.Front - s.windscreen));
+                return s.hood - 0.1f * (1f - Mathf.Pow(t, 0.3f));
             }
-            if (x >= s.rearGlass) return Mathf.Lerp(s.deck, s.hood, (x - s.rearGlass) / (s.windscreen - s.rearGlass));
-            float u = (x - s.Rear) / (s.rearGlass - s.Rear);
-            float tail = s.deck - 0.11f;
-            return tail + (s.deck - tail) * Mathf.Sqrt(Mathf.Clamp01(u));
+            if (x >= s.rearGlass) return Mathf.Lerp(s.deck, s.hood, (x - s.rearGlass) / Mathf.Max(0.05f, s.windscreen - s.rearGlass));
+            float u = Mathf.Clamp01((x - s.Rear) / Mathf.Max(0.05f, s.rearGlass - s.Rear));
+            return s.deck - 0.09f * (1f - Mathf.Pow(u, 0.3f));
         }
 
         /// <summary>Bottom of the body: sills, bumpers lifting at the ends, and the wheel arches.</summary>
         static float BodyBottom(Style s, float x)
         {
-            float front = Mathf.Clamp01((s.Front - x) / 0.5f);
-            float rear = Mathf.Clamp01((x - s.Rear) / 0.5f);
+            float front = Mathf.Clamp01((s.Front - x) / 0.4f);
+            float rear = Mathf.Clamp01((x - s.Rear) / 0.4f);
             float y = s.sill + 0.16f * (1f - front) * (1f - front) + 0.12f * (1f - rear) * (1f - rear);
-            float archRadius = s.wheelRadius + 0.055f;
+            float archRadius = s.wheelRadius + 0.09f;
             foreach (float axle in new[] { s.FrontAxle, s.RearAxle })
             {
                 float dx = x - axle;
-                if (Mathf.Abs(dx) < archRadius) y = Mathf.Max(y, s.wheelRadius + Mathf.Sqrt(archRadius * archRadius - dx * dx));
+                if (Mathf.Abs(dx) < archRadius) y = Mathf.Max(y, s.wheelRadius + Mathf.Sqrt(Mathf.Max(0f, archRadius * archRadius - dx * dx)));
             }
             return Mathf.Min(y, BodyTop(s, x) - 0.1f);
         }
 
-        /// <summary>Half the body's width: full along the sides, rounding in at the corners.</summary>
+        /// <summary>Half the body's width at mid-height: flat along the sides, a crisp corner at the ends and a slight flare at each wheel arch.</summary>
         static float HalfWidth(Style s, float x)
         {
-            float k = Mathf.Clamp01(Mathf.Min(s.Front - x, x - s.Rear) / 0.45f);
-            return s.width / 2f * (0.86f + 0.14f * Mathf.Sqrt(k));
+            const float endBand = 0.32f;
+            float distEnd = Mathf.Min(s.Front - x, x - s.Rear);
+            float k = Mathf.Clamp01(distEnd / endBand);
+            float corner = 1f - 0.22f * (1f - k) * (1f - k);
+            float flare = 0f;
+            foreach (float axle in new[] { s.FrontAxle, s.RearAxle })
+            {
+                flare = Mathf.Max(flare, s.archFlare * Bell(Mathf.Abs(x - axle), 0f, s.wheelRadius + 0.22f));
+            }
+            return s.width / 2f * corner + flare;
         }
 
         /// <summary>Top of the cabin: windscreen and rear glass curving into the roof.</summary>
@@ -285,9 +326,9 @@ namespace Solmar.City
                 float t = (x - s.rearGlass) / (s.roofRear - s.rearGlass);
                 return Mathf.Lerp(BodyTop(s, s.rearGlass), s.roof, Mathf.Sin(Mathf.Clamp01(t) * Mathf.PI / 2f));
             }
-            // A slight crown along the roof.
+            // A very slight crown along the roof.
             float c = (x - s.roofRear) / (s.roofFront - s.roofRear);
-            return s.roof + 0.015f * Mathf.Sin(c * Mathf.PI);
+            return s.roof + 0.008f * Mathf.Sin(c * Mathf.PI);
         }
 
         struct Section
@@ -315,62 +356,118 @@ namespace Solmar.City
         static Assembly Model(Style s)
         {
             var a = new Assembly();
-            const float step = 0.03f;
+            const float step = 0.045f;
 
-            // Lower body.
+            // Lower body: a tucked rocker at the bottom, flat-ish flanks, and a shoulder crease just
+            // below the beltline, instead of one smooth superellipse blob.
+            float rockerDepth = 0.03f + Mathf.Max(0f, s.sill - 0.2f) * 0.3f;
             a.Add("paint", Loft(Sample(s.Rear, s.Front, step, x =>
             {
                 float hw = HalfWidth(s, x);
                 return new Section(x, BodyBottom(s, x), BodyTop(s, x), hw, hw * 0.94f);
-            }), 0.38f));
+            }), 0.24f, 28, shoulderCy: 0.62f, creaseDepth: 0.012f, rockerDepth: rockerDepth));
 
-            // Cabin glass, from just under the beltline, narrowing to the roof.
-            float cabin = s.width / 2f * 0.89f;
-            a.Add("glass", Loft(Sample(s.rearGlass, s.windscreen, step, x =>
-                new Section(x, BodyTop(s, x) - 0.03f, Roofline(s, x), cabin, cabin * s.cabinTaper)), 0.34f));
-
-            // Painted roof panel over the top of the cabin.
-            float roofHalf = cabin * s.cabinTaper * 0.92f + 0.01f;
-            a.Add("paint", Loft(Sample(s.roofRear - 0.06f, s.roofFront + 0.06f, step, x =>
+            // Painted roof panel over the flat top of the cabin.
+            float cabinHalf = s.width / 2f * 0.86f;
+            float roofHalf = cabinHalf * s.cabinTaper * 0.92f + 0.01f;
+            a.Add("paint", Loft(Sample(s.roofRear - 0.06f, s.roofFront + 0.06f, 0.05f, x =>
             {
                 float y = Roofline(s, x);
                 return new Section(x, y - 0.05f, y + 0.012f, roofHalf, roofHalf * 0.9f);
-            }), 0.3f));
+            }), 0.3f, 22));
 
-            // Wheels: the outer faces towards ±z.
+            // The glasshouse: windscreen, rear glass, side windows, pillars and sill trim.
+            AddGlasshouse(a, s);
+
+            // Wheels: tyre, rim, brake disc and caliper, and the arch's dark liner behind them.
             foreach (float axle in new[] { s.FrontAxle, s.RearAxle })
             {
                 foreach (int side in new[] { 1, -1 })
                 {
-                    Matrix4x4 place = Matrix4x4.TRS(new Vector3(axle, s.wheelRadius, side * s.Track), Quaternion.Euler(side * 90f, 0f, 0f), Vector3.one);
+                    Vector3 centre = new Vector3(axle, s.wheelRadius, side * s.Track);
+                    Matrix4x4 place = Matrix4x4.TRS(centre, Quaternion.Euler(side * 90f, 0f, 0f), Vector3.one);
                     a.Add("tyre", Tyre(s.wheelRadius, s.wheelWidth).Transform(place));
                     a.Add("rim", Rim(s.wheelRadius, s.wheelWidth).Transform(place));
+                    float discRadius = s.wheelRadius * 0.72f;
+                    a.Add("disc", CarParts.BrakeDisc(discRadius, s.wheelWidth * 0.3f).Transform(place));
+                    a.Add("caliper", Box(0.1f, 0.09f, s.wheelWidth * 0.55f, 0.012f,
+                        axle + discRadius * 0.2f, s.wheelRadius + discRadius * 0.7f, side * s.Track));
+
+                    float archRadius = s.wheelRadius + 0.09f;
+                    MeshData liner = CarParts.ArchLiner(archRadius - 0.015f, s.wheelWidth + 0.1f)
+                        .Translate(axle, s.wheelRadius, side * s.Track);
+                    a.Add("tyre", liner); // reuse the dark rubber-like material for the liner
                 }
             }
 
-            // Lamps, bumpers, grille, the rear plate (Florida has none at the front), mirrors and handles.
+            // Lamps, bumpers, grille, the rear plate, mirrors, handles and shut lines.
             float noseTop = BodyTop(s, s.Front);
             float tailTop = BodyTop(s, s.Rear);
+            bool hasRearWindow = s.HasRearWindow;
+            float bPillarX = s.BPillarX;
             foreach (int side in new[] { 1, -1 })
             {
-                a.Add("lamp", Box(0.16f, 0.1f, 0.34f, 0.025f, s.Front - 0.1f, noseTop - 0.04f, side * s.width * 0.3f));
-                a.Add("tail", Box(0.14f, 0.11f, 0.36f, 0.025f, s.Rear + 0.08f, tailTop - 0.08f, side * s.width * 0.31f));
+                // Headlamp cluster: housing, a clear lens proud of it, and an inner reflector glint.
+                float lampZ = side * s.width * 0.32f;
+                float lampX = s.Front - 0.09f;
+                float lampY = noseTop - 0.05f;
+                a.Add("lamp", Box(0.12f, 0.09f, 0.3f, 0.02f, lampX, lampY, lampZ));
+                a.Add("lens", Box(0.03f, 0.075f, 0.26f, 0.012f, lampX + 0.075f, lampY, lampZ));
+                a.Add("reflector", Box(0.04f, 0.05f, 0.16f, 0.01f, lampX - 0.02f, lampY + 0.005f, lampZ));
+
+                // Tail lamp cluster: a dark housing set back, a red lens proud of it.
+                float tailZ = side * s.width * 0.33f;
+                float tailX = s.Rear + 0.07f;
+                float tailY = tailTop - 0.09f;
+                a.Add("trim", Box(0.1f, 0.14f, 0.4f, 0.02f, tailX - 0.02f, tailY, tailZ));
+                a.Add("tail", Box(0.05f, 0.11f, 0.34f, 0.018f, tailX + 0.045f, tailY, tailZ));
+
+                // Mirror on an arm.
                 float mirrorX = s.windscreen - 0.1f;
-                a.Add("paint", Box(0.13f, 0.1f, 0.2f, 0.025f, mirrorX, BodyTop(s, mirrorX) + 0.1f, side * (s.width / 2f + 0.07f)));
-                a.Add("trim", Box(0.06f, 0.05f, 0.08f, 0.01f, mirrorX, BodyTop(s, mirrorX) + 0.04f, side * (s.width / 2f - 0.01f)));
+                float mirrorBaseZ = side * (s.width / 2f - 0.01f);
+                float mirrorHeadZ = side * (s.width / 2f + 0.1f);
+                float armY = BodyTop(s, mirrorX) + 0.06f;
+                a.Add("trim", Box(0.035f, 0.035f, Mathf.Abs(mirrorHeadZ - mirrorBaseZ) + 0.02f, 0.01f,
+                    mirrorX, armY, (mirrorBaseZ + mirrorHeadZ) / 2f));
+                a.Add("paint", Box(0.13f, 0.09f, 0.18f, 0.02f, mirrorX, armY + 0.06f, mirrorHeadZ));
+                a.Add("trim", Box(0.11f, 0.07f, 0.15f, 0.015f, mirrorX + 0.012f, armY + 0.05f, mirrorHeadZ));
+
+                // Door handles and shut lines (thin dark seams at the door edges).
                 var handles = new List<float> { s.windscreen - 0.55f };
-                if (s.rearDoors && s.roofRear < s.windscreen - 1.6f) handles.Add(s.windscreen - 1.5f);
+                if (hasRearWindow) handles.Add(bPillarX);
                 foreach (float hx in handles)
                 {
                     a.Add("trim", Box(0.15f, 0.025f, 0.02f, 0.006f, hx, BodyTop(s, hx) - 0.1f, side * HalfWidth(s, hx)));
                 }
+                float frontSeamX = s.windscreen - 0.05f;
+                a.Add("trim", Box(0.015f, (BodyTop(s, frontSeamX) - BodyBottom(s, frontSeamX)) * 0.85f, 0.012f, 0.004f,
+                    frontSeamX, (BodyTop(s, frontSeamX) + BodyBottom(s, frontSeamX)) / 2f, side * HalfWidth(s, frontSeamX)));
+                if (hasRearWindow)
+                {
+                    float rearSeamX = s.roofRear + 0.05f;
+                    a.Add("trim", Box(0.015f, (BodyTop(s, rearSeamX) - BodyBottom(s, rearSeamX)) * 0.85f, 0.012f, 0.004f,
+                        rearSeamX, (BodyTop(s, rearSeamX) + BodyBottom(s, rearSeamX)) / 2f, side * HalfWidth(s, rearSeamX)));
+                }
+
+                // Side skirt: a darker cladding strip along the sill between the wheel arches.
+                float skirtFrom = s.RearAxle + s.wheelRadius * 0.95f;
+                float skirtTo = s.FrontAxle - s.wheelRadius * 0.95f;
+                float skirtLen = Mathf.Max(0.2f, skirtTo - skirtFrom);
+                float skirtX = (skirtFrom + skirtTo) / 2f;
+                a.Add("skirt", Box(skirtLen, 0.06f, 0.02f, 0.008f, skirtX, BodyBottom(s, skirtX) + 0.02f, side * (HalfWidth(s, skirtX) - 0.004f)));
             }
             float bumperFront = BodyBottom(s, s.Front) + 0.06f;
             float bumperRear = BodyBottom(s, s.Rear) + 0.06f;
             a.Add("trim", Box(0.1f, 0.09f, s.width * 0.78f, 0.03f, s.Front - 0.04f, bumperFront, 0f));
             a.Add("trim", Box(0.1f, 0.09f, s.width * 0.78f, 0.03f, s.Rear + 0.04f, bumperRear, 0f));
-            a.Add("trim", Box(0.08f, 0.13f, s.width * 0.34f, 0.02f, s.Front - 0.04f, (bumperFront + noseTop) / 2f, 0f));
-            a.Add("plate", Box(0.03f, 0.15f, 0.3f, 0.005f, s.Rear + 0.01f, (bumperRear + tailTop) / 2f, 0f));
+            a.Add("grille", Box(0.07f, 0.13f, s.width * 0.36f, 0.015f, s.Front - 0.09f, (bumperFront + noseTop) / 2f, 0f));
+            a.Add("trim", Box(0.02f, 0.19f, 0.34f, 0.008f, s.Rear + 0.005f, (bumperRear + tailTop) / 2f, 0f));
+            a.Add("plate", Box(0.03f, 0.15f, 0.3f, 0.005f, s.Rear + 0.02f, (bumperRear + tailTop) / 2f, 0f));
+
+            // Exhaust tip, poking out from under the rear bumper, off to one side.
+            MeshData exhaust = CarParts.ExhaustTip(0.032f, 0.13f).RotateZ(Mathf.PI / 2f)
+                .Translate(s.Rear + 0.17f, BodyBottom(s, s.Rear) + 0.05f, -s.width * 0.18f);
+            a.Add("rim", exhaust);
 
             if (s.taxiSign)
             {
@@ -379,6 +476,54 @@ namespace Solmar.City
                 a.Add("sign", Box(0.24f, 0.15f, 0.7f, 0.03f, rx, s.roof + 0.12f, 0f));
             }
             return a;
+        }
+
+        /// <summary>Windscreen and rear glass as sloped panels, and per side an A/B/C-pillar frame with one or two door windows and a sill trim.</summary>
+        static void AddGlasshouse(Assembly a, Style s)
+        {
+            float beltline = BodyTop(s, (s.windscreen + s.rearGlass) / 2f);
+            AddSlopedGlass(a, s.windscreen, BodyTop(s, s.windscreen), s.roofFront, s.roof, s.width * 0.82f);
+            AddSlopedGlass(a, s.rearGlass, BodyTop(s, s.rearGlass), s.roofRear, s.roof, s.width * 0.8f);
+
+            bool hasRearWindow = s.HasRearWindow;
+            float bPillarX = s.BPillarX;
+            float cabinHalf = s.width / 2f * 0.86f;
+            float top = s.roof - 0.035f;
+            float mid = (beltline + top) / 2f;
+            float height = Mathf.Max(0.15f, top - beltline);
+
+            foreach (int side in new[] { 1, -1 })
+            {
+                float z = side * cabinHalf;
+                a.Add("trim", Box(0.05f, height + 0.05f, 0.05f, 0.012f, s.windscreen, mid, z));
+                a.Add("trim", Box(0.06f, height + 0.05f, 0.05f, 0.012f, s.roofRear, mid, z));
+                if (hasRearWindow)
+                {
+                    a.Add("trim", Box(0.05f, height + 0.05f, 0.05f, 0.012f, bPillarX, mid, z));
+                    float frontLen = s.windscreen - bPillarX - 0.1f;
+                    float rearLen = bPillarX - s.roofRear - 0.1f;
+                    a.Add("glass", Box(Mathf.Max(0.1f, frontLen), height, 0.03f, 0.01f, (s.windscreen + bPillarX) / 2f, mid, z));
+                    a.Add("glass", Box(Mathf.Max(0.1f, rearLen), height, 0.03f, 0.01f, (bPillarX + s.roofRear) / 2f, mid, z));
+                }
+                else
+                {
+                    float len = s.windscreen - s.roofRear - 0.1f;
+                    a.Add("glass", Box(Mathf.Max(0.1f, len), height, 0.03f, 0.01f, (s.windscreen + s.roofRear) / 2f, mid, z));
+                }
+                // Window sill: a thin trim strip along the base of the glass.
+                a.Add("trim", Box(s.windscreen - s.roofRear, 0.02f, 0.03f, 0.006f, (s.windscreen + s.roofRear) / 2f, beltline + 0.005f, z));
+            }
+        }
+
+        /// <summary>A sloped glass panel from (baseX, baseY) to (topX, topY), with a thin dark surround.</summary>
+        static void AddSlopedGlass(Assembly a, float baseX, float baseY, float topX, float topY, float width)
+        {
+            float dx = topX - baseX, dy = topY - baseY;
+            float len = Mathf.Sqrt(Mathf.Max(1e-4f, dx * dx + dy * dy));
+            float angle = Mathf.Atan2(dy, dx);
+            float cx = (baseX + topX) / 2f, cy = (baseY + topY) / 2f;
+            a.Add("glass", Shapes.ChamferBox(len, 0.025f, width, 0.01f).RotateZ(angle).Translate(cx, cy, 0f));
+            a.Add("trim", Shapes.ChamferBox(len + 0.03f, 0.02f, width + 0.05f, 0.008f).RotateZ(angle).Translate(cx, cy, 0f));
         }
 
         static MeshData Box(float w, float h, float d, float c, float x, float y, float z)
@@ -398,7 +543,7 @@ namespace Solmar.City
             }, 32);
         }
 
-        /// <summary>A five-spoke rim about y, its face at +y: barrel, a dish set back behind the spokes, and a hub.</summary>
+        /// <summary>An eight-spoke rim about y, its face at +y: barrel, a dish set back behind the spokes, and a hub.</summary>
         static MeshData Rim(float r, float w)
         {
             float h = w / 2f;
@@ -409,9 +554,10 @@ namespace Solmar.City
                 new Vector2(rr * 0.86f, h - 0.07f), new Vector2(rr * 0.25f, h - 0.07f), new Vector2(rr * 0.22f, h - 0.02f),
                 new Vector2(rr * 0.12f, h - 0.012f), new Vector2(0f, h - 0.012f),
             }, 28);
-            for (int k = 0; k < 5; k++)
+            const int spokes = 8;
+            for (int k = 0; k < spokes; k++)
             {
-                m.Append(Shapes.ChamferBox(rr * 0.72f, 0.04f, 0.055f, 0.008f).Translate(rr * 0.56f, h - 0.035f, 0f).RotateY(k * Mathf.PI * 2f / 5f));
+                m.Append(Shapes.ChamferBox(rr * 0.72f, 0.032f, 0.05f, 0.007f).Translate(rr * 0.56f, h - 0.035f, 0f).RotateY(k * Mathf.PI * 2f / spokes));
             }
             return m;
         }
@@ -419,10 +565,12 @@ namespace Solmar.City
         /// <summary>
         /// Lofts a closed surface through cross-sections along x. Each section is a superellipse
         /// (exponent p: 1 is a diamond, small values a rounded rectangle) between y0 and y1, whose
-        /// half-width narrows from halfWidth at mid-height to halfWidthTop at the top. Normals are
-        /// smooth; the ends are capped. UVs are in metres (x, and distance around the section).
+        /// half-width narrows from halfWidth at mid-height to halfWidthTop at the top. A shallow dip
+        /// can be laid into the width at a given ring position (in cy, -1 bottom to 1 top): a tucked
+        /// rocker at cy = -1, or a shoulder crease partway up. Normals are smooth; the ends are capped.
+        /// UVs are in metres (x, and distance around the section).
         /// </summary>
-        static MeshData Loft(List<Section> sections, float p, int ring = 36)
+        static MeshData Loft(List<Section> sections, float p, int ring = 36, float shoulderCy = -2f, float creaseDepth = 0f, float rockerDepth = 0f)
         {
             var m = new MeshData();
             int n = sections.Count;
@@ -435,11 +583,13 @@ namespace Solmar.City
                 for (int k = 0; k <= ring; k++)
                 {
                     // Start at the bottom, so the seam is underneath.
-                    float a = -Mathf.PI / 2f + (float)k / ring * Mathf.PI * 2f;
-                    float c = Mathf.Cos(a), sn = Mathf.Sin(a);
+                    float ang = -Mathf.PI / 2f + (float)k / ring * Mathf.PI * 2f;
+                    float c = Mathf.Cos(ang), sn = Mathf.Sin(ang);
                     float cz = Mathf.Sign(c) * Mathf.Pow(Mathf.Abs(c), p);
                     float cy = Mathf.Sign(sn) * Mathf.Pow(Mathf.Abs(sn), p);
                     float hw = cy > 0f ? Mathf.Lerp(s.halfWidth, s.halfWidthTop, cy) : s.halfWidth;
+                    if (creaseDepth > 0f) hw *= 1f - creaseDepth / Mathf.Max(0.05f, s.halfWidth) * Bell(cy, shoulderCy, 0.12f);
+                    if (rockerDepth > 0f) hw *= 1f - rockerDepth / Mathf.Max(0.05f, s.halfWidth) * Bell(cy, -1f, 0.35f);
                     pts[i * stride + k] = new Vector3(s.x, mid + cy * half, cz * hw);
                 }
             }
