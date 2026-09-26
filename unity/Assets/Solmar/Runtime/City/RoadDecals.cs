@@ -1,12 +1,14 @@
 using System.Collections.Generic;
 using Solmar.Rendering;
 using UnityEngine;
-using UnityEngine.Rendering.HighDefinition;
+using UnityEngine.Rendering;
 
 namespace Solmar.City
 {
     /// <summary>
-    /// Road markings and puddle sites as HDRP decals projected onto the asphalt:
+    /// Road markings and puddle sites as HDRP mesh decals: thin strips of the decal materials laid
+    /// a centimetre above the asphalt and following its crown (no DecalProjectors, which HDRP's
+    /// decal system could trip over when the street is rebuilt):
     ///   markings  double yellow centre line, dashed lane lines (3 m dash, 9 m gap), solid parking
     ///             lane edge lines, a continental crosswalk (0.6 m bars, 0.6 m gaps) and stop lines
     ///             1.2 m before it; worn paint (the decal texture's alpha)
@@ -23,22 +25,43 @@ namespace Solmar.City
             root.transform.SetParent(parent, false);
             float half = Layout.StreetHalfLength;
 
-            // A decal projected straight down onto the road: centre (x, z), size along x and z.
+            // One mesh per decal material, built up as the decals are laid out.
+            var meshes = new Dictionary<Material, MeshData>();
+
+            // A decal lying on the road: centre (x, z), size along x and z (before `yaw` degrees
+            // of turn), with the texture repeated uvScaleX by uvScaleY times across it. Split
+            // into cells of about a metre so it follows the road's crown and camber.
             void Decal(string name, Material material, float x, float z, float sx, float sz, float yaw = 0f, float uvScaleX = 1f, float uvScaleY = 1f)
             {
-                var go = new GameObject(name);
-                go.transform.SetParent(root.transform, false);
-                // Pointing straight down (local +z), centred 15 cm above the road: the box reaches
-                // 10 cm below the centre's height, enough for the crown's fall across a stop line.
-                go.transform.SetPositionAndRotation(new Vector3(x, Street.Height(x, z) + 0.15f, z), Quaternion.Euler(90f, yaw, 0f));
-                var d = go.AddComponent<DecalProjector>();
-                d.material = material;
-                // Projector space: x and y across the decal, z the projection depth.
-                d.size = new Vector3(sx, sz, 0.5f);
-                d.pivot = Vector3.zero;
-                d.uvScale = new Vector2(uvScaleX, uvScaleY);
-                d.drawDistance = 400f;
-                d.fadeFactor = 1f;
+                if (!meshes.TryGetValue(material, out MeshData data))
+                {
+                    data = new MeshData();
+                    meshes.Add(material, data);
+                }
+                int nx = Mathf.Clamp(Mathf.CeilToInt(sx), 1, 64);
+                int nz = Mathf.Clamp(Mathf.CeilToInt(sz), 1, 64);
+                Quaternion turn = Quaternion.Euler(0f, yaw, 0f);
+                int first = data.VertexCount;
+                for (int j = 0; j <= nz; j++)
+                {
+                    for (int i = 0; i <= nx; i++)
+                    {
+                        float u = (float)i / nx, v = (float)j / nz;
+                        Vector3 p = new Vector3(x, 0f, z) + turn * new Vector3((u - 0.5f) * sx, 0f, (v - 0.5f) * sz);
+                        p.y = Street.Height(p.x, p.z) + 0.01f;
+                        data.AddVertex(p, Vector3.up, new Vector2(u * uvScaleX, v * uvScaleY));
+                    }
+                }
+                for (int j = 0; j < nz; j++)
+                {
+                    for (int i = 0; i < nx; i++)
+                    {
+                        int a0 = first + j * (nx + 1) + i;
+                        int a1 = a0 + 1, b0 = a0 + nx + 1, b1 = b0 + 1;
+                        data.AddTriangle(a0, b0, b1);
+                        data.AddTriangle(a0, b1, a1);
+                    }
+                }
             }
 
             // Long lines in 20 m pieces (the paint texture tiles every metre along them).
@@ -101,6 +124,19 @@ namespace Solmar.City
             {
                 Vector4 s = spots[k];
                 Decal("Puddle", m.PuddleDecals[k % m.PuddleDecals.Count], s.x, s.y, s.z, s.w * 1.4f, (random.Next() - 0.5f) * 20f);
+            }
+
+            foreach (KeyValuePair<Material, MeshData> pair in meshes)
+            {
+                var go = new GameObject(pair.Key.name);
+                go.transform.SetParent(root.transform, false);
+                Mesh mesh = pair.Value.ToMesh(pair.Key.name);
+                mesh.hideFlags = HideFlags.DontSave;
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var r = go.AddComponent<MeshRenderer>();
+                r.sharedMaterial = pair.Key;
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                // Not static: CityColliders skips it, so it never becomes a collider.
             }
             return root;
         }
