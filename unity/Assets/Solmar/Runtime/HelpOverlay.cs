@@ -13,7 +13,7 @@ namespace Solmar
             "C: free-fly camera (hold right mouse + W A S D, Q/E down/up, Shift faster)\n" +
             "[ ]: time of day   hold T: fast-forward (lamps and windows light up at night)   K: weather\n" +
             "M: map (right-click sets a GPS waypoint)   F2: screenshot   F3: performance   F5: quality preset   F6: fps cap\n" +
-            "P or Esc: pause menu (settings, save, load)   H: hide this help";
+            "P or Esc: pause menu (settings, save, load)   L: add a wanted star (test)   H: hide this help";
 
         float shownFor = 10f;
         bool pinned;
