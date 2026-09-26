@@ -45,6 +45,37 @@ namespace Solmar
             return this;
         }
 
+        /// <summary>
+        /// Guards against NaN or infinite vertices from a bad shape formula, which Unity rejects and
+        /// which blank the screen through HDRP's auto-exposure: collapses the triangles that use
+        /// them, moves the vertices to a finite neighbour, and logs a warning naming the mesh.
+        /// </summary>
+        public void DropNonFinite(string name)
+        {
+            static bool Finite(Vector3 v) => !(float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z) || float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z));
+            int bad = 0;
+            Vector3 fallback = Vector3.zero;
+            for (int i = 0; i < positions.Count; i++)
+            {
+                if (Finite(positions[i])) { fallback = positions[i]; break; }
+            }
+            var broken = new bool[positions.Count];
+            for (int i = 0; i < positions.Count; i++)
+            {
+                if (!Finite(normals[i])) normals[i] = Vector3.up;
+                if (Finite(positions[i])) continue;
+                positions[i] = fallback;
+                broken[i] = true;
+                bad++;
+            }
+            if (bad == 0) return;
+            for (int t = 0; t + 2 < indices.Count; t += 3)
+            {
+                if (broken[indices[t]] || broken[indices[t + 1]] || broken[indices[t + 2]]) indices[t + 1] = indices[t + 2] = indices[t];
+            }
+            Debug.LogWarning("Solmar: mesh '" + name + "' had " + bad + " invalid vertices; they were removed.");
+        }
+
         public MeshData Translate(float x, float y, float z)
         {
             return Transform(Matrix4x4.Translate(new Vector3(x, y, z)));
@@ -85,11 +116,12 @@ namespace Solmar
         /// <summary>A single-submesh Unity mesh with tangents for normal mapping.</summary>
         public Mesh ToMesh(string name)
         {
+            DropNonFinite(name);
             var mesh = new Mesh { name = name, indexFormat = positions.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
             mesh.SetVertices(positions);
             mesh.SetNormals(normals);
             mesh.SetUVs(0, uvs);
-            mesh.SetTriangles(indices, 0);
+            mesh.SetTriangles(indices, 0, false);
             mesh.RecalculateBounds();
             mesh.RecalculateTangents();
             return mesh;
@@ -122,7 +154,11 @@ namespace Solmar
         public Mesh Build(string name)
         {
             int total = 0;
-            foreach (string s in slots) total += parts[s].VertexCount;
+            foreach (string s in slots)
+            {
+                parts[s].DropNonFinite(name + " (" + s + ")");
+                total += parts[s].VertexCount;
+            }
             var positions = new List<Vector3>(total);
             var normals = new List<Vector3>(total);
             var uvs = new List<Vector2>(total);

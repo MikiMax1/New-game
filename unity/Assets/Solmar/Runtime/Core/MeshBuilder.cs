@@ -229,6 +229,7 @@ namespace Solmar
             var offsets = new List<int>();
             foreach (Material m in used)
             {
+                parts[m].DropNonFinite(name + " (" + m.name + ")");
                 offsets.Add(positions.Count);
                 positions.AddRange(parts[m].positions);
                 normals.AddRange(parts[m].normals);
