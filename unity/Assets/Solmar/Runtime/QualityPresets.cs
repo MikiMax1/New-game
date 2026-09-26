@@ -84,6 +84,24 @@ namespace Solmar
             Application.targetFrameRate = frameRateCap > 0 ? frameRateCap : -1;
         }
 
+        /// <summary>Sets the quality preset by index (0 Low .. 4 Extreme) and applies it immediately;
+        /// for the pause menu's Settings tab.</summary>
+        public void SetPreset(int index)
+        {
+            preset = (Preset)Mathf.Clamp(index, 0, 4);
+            ApplyPreset();
+            displayTimer = 2.5f;
+        }
+
+        /// <summary>Sets the frame-rate cap directly (0 for none) and applies it immediately; for the
+        /// pause menu's Settings tab.</summary>
+        public void SetFrameRateCap(int fps)
+        {
+            frameRateCap = fps;
+            ApplyFrameRate();
+            displayTimer = 2.5f;
+        }
+
         void ApplyPreset()
         {
             int p = (int)preset;

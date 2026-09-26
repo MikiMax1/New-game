@@ -26,6 +26,9 @@ namespace Solmar
 
         /// <summary>The current time of day, in hours (0-24).</summary>
         public float Hours { get; private set; }
+
+        /// <summary>Jumps the clock to `hours` (0–24), e.g. when a saved game is loaded.</summary>
+        public void SetHours(float hours) => Hours = Mathf.Repeat(hours, 24f);
         public float ElevationDegrees { get; private set; }
         public float AzimuthDegrees { get; private set; }
 

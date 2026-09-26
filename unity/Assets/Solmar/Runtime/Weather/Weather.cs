@@ -43,6 +43,10 @@ namespace Solmar.Weather
 
         /// <summary>The weather right now.</summary>
         public static Kind Current { get; private set; } = Kind.Clear;
+
+        /// <summary>Switches to `kind` (e.g. when a saved game is loaded); the sky, rain and wetness
+        /// then ease towards it over the usual transition.</summary>
+        public static void Set(Kind kind) => Current = kind;
         /// <summary>0 (dry) to 1 (downpour): the current rain rate, smoothly transitioning between states.</summary>
         public static float Rain { get; private set; }
         /// <summary>0 (bone dry) to 1 (soaked): how wet the ground is right now. Rises in rain, dries
