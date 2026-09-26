@@ -36,7 +36,7 @@ namespace Solmar
         {
             if (!pinned && shownFor <= 0f) return;
             style ??= new GUIStyle(GUI.skin.label) { fontSize = 16 };
-            const float w = 640f, h = 150f;
+            const float w = 860f, h = 150f;
             var rect = new Rect(16f, Screen.height - h - 16f, w, h);
             GUI.color = new Color(0f, 0f, 0f, 0.55f);
             GUI.DrawTexture(new Rect(rect.x - 8f, rect.y - 6f, w + 16f, h + 8f), Texture2D.whiteTexture);
