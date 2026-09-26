@@ -71,10 +71,12 @@ namespace Solmar.Rendering
             PbrSet galvanised = textures.Bake(ProceduralTextures.Recipe.Galvanised, 0.6f, small, Color.white);
             PbrSet brushed = textures.Bake(ProceduralTextures.Recipe.Brushed, 0.6f, small, Color.white);
 
-            // Wet asphalt: the water film is HDRP's clear coat (a smooth dielectric layer).
-            Road = Lit("Wet road", asphalt, Color.white, coat: 1f);
-            Pavement = Lit("Pavement", pavement, Color.white, coat: 0.5f);
-            Kerb = Lit("Granite kerb", granite, Color.white, coat: 0.4f);
+            // Dry by default: worn matte asphalt and pavement, no water film. Solmar.Weather raises
+            // _SmoothnessRemapMax and _CoatMask on these same shared materials as it rains, and eases
+            // them back down as the street dries, so this is only the dry baseline.
+            Road = Lit("Asphalt road", asphalt, Color.white, coat: 0f, smoothnessMax: 0.22f);
+            Pavement = Lit("Pavement", pavement, Color.white, coat: 0f, smoothnessMax: 0.4f);
+            Kerb = Lit("Granite kerb", granite, Color.white, coat: 0f, smoothnessMax: 0.55f);
             Granite = Lit("Granite", granite, Color.white);
             Concrete = Lit("Concrete", concrete, Linear(1.05f, 1.04f, 1.02f), tile: 1.2f);
             FacadeConcrete = Lit("Facade concrete", concrete, Color.white);
@@ -190,8 +192,10 @@ namespace Solmar.Rendering
             return m;
         }
 
-        /// <summary>HDRP/Lit with a baked set, tiled at the set's size (or `tile` metres).</summary>
-        Material Lit(string name, PbrSet set, Color baseColor, float coat = 0f, float tile = 0f)
+        /// <summary>HDRP/Lit with a baked set, tiled at the set's size (or `tile` metres). The mask
+        /// map's baked smoothness is remapped to [0, smoothnessMax] so a surface reads matte without
+        /// re-baking its texture; Solmar.Weather widens that ceiling again as the surface gets wet.</summary>
+        Material Lit(string name, PbrSet set, Color baseColor, float coat = 0f, float tile = 0f, float smoothnessMax = 1f)
         {
             Material m = New(name);
             m.SetColor("_BaseColor", baseColor);
@@ -202,6 +206,11 @@ namespace Solmar.Rendering
             float t = tile > 0f ? tile : set.tile;
             m.SetTextureScale("_BaseColorMap", new Vector2(1f / t, 1f / t));
             if (coat > 0f) m.SetFloat("_CoatMask", coat);
+            if (smoothnessMax < 1f)
+            {
+                m.SetFloat("_SmoothnessRemapMin", 0f);
+                m.SetFloat("_SmoothnessRemapMax", smoothnessMax);
+            }
             HDMaterial.ValidateMaterial(m);
             return m;
         }
@@ -272,7 +281,9 @@ namespace Solmar.Rendering
             return m;
         }
 
-        /// <summary>Standing water: darkens the asphalt, flattens it and makes it a mirror.</summary>
+        /// <summary>Standing water: darkens the asphalt, flattens it and makes it a mirror. Invisible
+        /// by default (_DecalBlend 0, dry street); Solmar.Weather raises _DecalBlend on this shared
+        /// material as puddles form in rain and lowers it again as they dry out.</summary>
         Material PuddleDecal(RenderTexture[] maps, int index)
         {
             Material m = NewDecal("Puddle " + index);
@@ -288,7 +299,7 @@ namespace Solmar.Rendering
             // Normal and smoothness opacity from the mask map's blue channel.
             m.SetFloat("_NormalBlendSrc", 1f);
             m.SetFloat("_MaskBlendSrc", 1f);
-            m.SetFloat("_DecalBlend", 1f);
+            m.SetFloat("_DecalBlend", 0f);
             HDMaterial.ValidateMaterial(m);
             return m;
         }

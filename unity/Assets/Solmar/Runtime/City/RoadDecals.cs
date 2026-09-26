@@ -6,11 +6,14 @@ using UnityEngine.Rendering.HighDefinition;
 namespace Solmar.City
 {
     /// <summary>
-    /// Road markings and puddles as HDRP decals projected onto the wet asphalt:
+    /// Road markings and puddle sites as HDRP decals projected onto the asphalt:
     ///   markings  double yellow centre line, dashed lane lines (3 m dash, 9 m gap), solid parking
     ///             lane edge lines, a continental crosswalk (0.6 m bars, 0.6 m gaps) and stop lines
     ///             1.2 m before it; worn paint (the decal texture's alpha)
-    ///   puddles   standing water in the wheel paths and gutters: darker, flat, mirror-smooth
+    ///   puddles   standing-water sites in the wheel ruts and gutters, where rain actually pools;
+    ///             invisible on the dry street (CityMaterials.PuddleDecal's _DecalBlend starts at 0)
+    ///             and only shown by Solmar.Weather once it has been raining long enough to wet the
+    ///             road, fading them back out as the street dries
     /// </summary>
     public static class RoadDecals
     {
@@ -74,9 +77,11 @@ namespace Solmar.City
             Decal("Stop line", m.DecalWhite, cw0 - 1.425f, Layout.ParkingZ / 2f + 0.1f, 0.45f, Layout.ParkingZ - 0.2f, 0f, 1f, 6f);
             Decal("Stop line", m.DecalWhite, cw1 + 1.425f, -Layout.ParkingZ / 2f - 0.1f, 0.45f, Layout.ParkingZ - 0.2f, 0f, 1f, 6f);
 
-            // Puddles: in the wheel paths (where the ruts are) and along the gutters.
+            // Puddle sites: in the wheel paths (where the ruts are) and along the gutters, where
+            // standing water actually collects. Fewer, larger sites than a fully wet street would
+            // show, since these only appear once Weather says the road is wet.
             var spots = new List<Vector4>();
-            for (int k = 0; k < 34; k++)
+            for (int k = 0; k < 22; k++)
             {
                 float x = -70f + random.Next() * 110f;
                 if (Mathf.Abs(x - Layout.CrossingX) < 3f) continue;
@@ -86,7 +91,7 @@ namespace Solmar.City
                 float len = 1.2f + random.Next() * 3.5f;
                 spots.Add(new Vector4(x, z, len, 0.5f + random.Next() * 0.5f));
             }
-            for (int k = 0; k < 16; k++)
+            for (int k = 0; k < 10; k++)
             {
                 float x = -80f + random.Next() * 150f;
                 float z = (random.Next() < 0.5f ? -1f : 1f) * (Layout.KerbZ - 0.3f);
