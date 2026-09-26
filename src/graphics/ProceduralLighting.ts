@@ -99,7 +99,7 @@ export class ProceduralLighting {
   constructor(
     private readonly renderer: WebGPURenderer,
     private readonly scene: Scene,
-    sun: SunPosition = { elevation: 9, azimuth: 200 },
+    sun: SunPosition = { elevation: 12, azimuth: 188 },
     atmosphere: AtmosphereOptions = {},
   ) {
     this.pmrem = new PMREMGenerator(renderer);

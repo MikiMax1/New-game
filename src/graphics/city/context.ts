@@ -1,4 +1,5 @@
 // What every part of the procedural city is built with.
+import type { Vector3 } from 'three/webgpu';
 import type { CityMaterials } from './CityMaterials';
 
 export interface CityContext {
@@ -7,6 +8,8 @@ export interface CityContext {
   height(x: number, z: number): number;
   /** Deterministic pseudo-random numbers in [0, 1) (the same city on every run). */
   random(): number;
+  /** Unit vector towards the sun (for translucent leaves and the like). */
+  sun: Vector3;
 }
 
 /** A small deterministic PRNG (mulberry32). */

@@ -95,11 +95,16 @@ export function extrude(shape: Shape, depth: number, bevel = 0.005, curveSegment
   return boxUVs(g);
 }
 
-/** Merges geometries into one, one draw group per input (for multi-material meshes). */
+/**
+ * Merges geometries into one, one draw group per input (for multi-material meshes). Mixed indexed
+ * and non-indexed inputs (extrusions are non-indexed) are all converted to non-indexed.
+ */
 export function merge(geometries: BufferGeometry[], groups = true): BufferGeometry {
+  const mixed = geometries.some((g) => g.index) && geometries.some((g) => !g.index);
   const prepared = geometries.map((g) => {
-    const n = g.index ? g : g;
+    const n = mixed && g.index ? g.toNonIndexed() : g;
     for (const name of Object.keys(n.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') n.deleteAttribute(name);
+    n.clearGroups();
     return n;
   });
   const merged = mergeGeometries(prepared, groups);

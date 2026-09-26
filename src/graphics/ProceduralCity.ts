@@ -30,10 +30,12 @@ export interface CityOptions {
   /** Surfaces for the road and pavements (they add markings, joints and puddles). */
   road: Mesh['material'];
   pavement: Mesh['material'];
+  /** Unit vector towards the sun. */
+  sun: Vector3;
 }
 
 export function buildCity(materials: CityMaterials, options: CityOptions): City {
-  const ctx: CityContext = { materials, height: streetHeight, random: seededRandom(options.seed ?? 7) };
+  const ctx: CityContext = { materials, height: streetHeight, random: seededRandom(options.seed ?? 7), sun: options.sun };
   const root = new Group();
   root.name = 'City';
 

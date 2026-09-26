@@ -111,6 +111,33 @@ export class MeshBuilder {
     else part.idx.push(i0, i1, i2, i0, i2, i3);
   }
 
+  /**
+   * A window pane: a rectangle in the plane z = const facing +z, with UVs running 0..1 across it
+   * (instead of metres) and `weathering` carrying (seed, width, height) for the window material
+   * (see buildings/Windows.ts).
+   */
+  pane(material: Material, x0: number, x1: number, y0: number, y1: number, z: number, seed: number): void {
+    if (x1 - x0 < 1e-5 || y1 - y0 < 1e-5) return;
+    const part = this.part(material);
+    const w: Weather = [seed, x1 - x0, y1 - y0];
+    const base = part.vertexCount;
+    const corners: [number, number, number, number][] = [
+      [x0, y0, 0, 0],
+      [x1, y0, 1, 0],
+      [x1, y1, 1, 1],
+      [x0, y1, 0, 1],
+    ];
+    for (const [x, y, u, v] of corners) {
+      _p.set(x, y, z).applyMatrix4(this.matrix);
+      _n.set(0, 0, 1).applyMatrix3(this.normalMatrix).normalize();
+      part.pos.push(_p.x, _p.y, _p.z);
+      part.nor.push(_n.x, _n.y, _n.z);
+      part.uv.push(u, v);
+      part.wth.push(w[0], w[1], w[2]);
+    }
+    part.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
   /** A rectangle in the plane z = const, facing +z (facing = 1) or -z. */
   rectZ(material: Material, x0: number, x1: number, y0: number, y1: number, z: number, facing: 1 | -1, w?: [Weather, Weather, Weather, Weather]): void {
     if (x1 - x0 < 1e-5 || y1 - y0 < 1e-5) return;

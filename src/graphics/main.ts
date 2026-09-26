@@ -79,7 +79,7 @@ async function main(): Promise<void> {
   }
 
   await stage('Building the city…', 0.55);
-  const city = buildCity(materials, { road, pavement });
+  const city = buildCity(materials, { road, pavement, sun: lighting.sunDirection });
   scene.add(city.root);
   lighting.fitShadow(city.shadowBounds);
 
