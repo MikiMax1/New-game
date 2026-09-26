@@ -32,7 +32,7 @@ namespace Solmar
         GUIStyle style;
 
         /// <summary>
-        /// Adds the presets and the F3 overlay when a scene with the city starts playing, so scenes
+        /// Adds the presets, the F3 overlay and the help when a scene with the city starts playing, so scenes
         /// made before they existed get them too.
         /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -42,6 +42,7 @@ namespace Solmar
             var go = new GameObject("Game settings");
             go.AddComponent<QualityPresets>();
             go.AddComponent<PerformanceOverlay>();
+            go.AddComponent<HelpOverlay>();
         }
 
         void OnEnable()

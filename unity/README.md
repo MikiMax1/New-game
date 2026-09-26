@@ -46,6 +46,7 @@ away. It's off in the repository's own Git checkout.
     time, turn on **Project Settings > Player > Other Settings > Frame Timing Stats**.
   - `F5` steps the quality preset: Low, Medium, High, Ultra, Extreme. `F6` steps the frame-rate
     cap: none (the default; vsync is off), 60, 120, 144, 165, 240.
+  - `H` shows or hides the list of controls (it shows for ten seconds when Play starts).
   - If no keys work, set **Project Settings > Player > Active Input Handling** to **Both**.
 - **Screenshots to send:** **Solmar > Capture Spot Screenshots** saves a 1920×1080 PNG of every
   camera spot to `unity/Screenshots/`.
