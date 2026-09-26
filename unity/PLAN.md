@@ -26,6 +26,7 @@ dirt, and LODs. Everything stays procedural (no imported assets) unless a step s
 | Sound | Synthesised city ambience |
 | Parked cars | Sedan, hatchback, SUV, pickup and taxi in both parking lanes (A1, first pass: needs a look in the Editor) |
 | Street details | Bus shelter, bus stop sign, benches, bollards, newspaper boxes, bike rack (A2, first pack) |
+| Presets and F3 | Low to Extreme presets (`F5`), no frame cap by default with an optional cap (`F6`), F3 overlay with fps, 1% low, CPU/GPU ms, draw calls and a frame-time graph (B1 and B2 in part; upscaling still to do) |
 
 ## Next, in order (small steps)
 

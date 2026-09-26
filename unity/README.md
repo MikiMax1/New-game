@@ -34,6 +34,11 @@ Scene view straight away.
   - `[` and `]` move the time of day by 15 minutes, and holding `T` fast-forwards. The day
     starts at 18:16 on 26 September, with the sun low in the west-southwest.
   - `F2` saves a screenshot to `unity/Screenshots/`.
+  - `F3` shows fps, the 1% low, CPU and GPU time, draw calls and a frame-time graph. For GPU
+    time, turn on **Project Settings > Player > Other Settings > Frame Timing Stats**.
+  - `F5` steps the quality preset: Low, Medium, High, Ultra, Extreme. `F6` steps the frame-rate
+    cap: none (the default; vsync is off), 60, 120, 144, 165, 240.
+  - If no keys work, set **Project Settings > Player > Active Input Handling** to **Both**.
 - **Screenshots to send:** **Solmar > Capture Spot Screenshots** saves a 1920×1080 PNG of every
   camera spot to `unity/Screenshots/`.
 - **Camera spots:** under *Camera spots* there are *Hero*, *Crossing* and *Puddle*. Select one
