@@ -164,7 +164,8 @@ namespace Solmar.City
                 Vector3 tangent = (pts[i0 + 1] - pts[i0]).normalized;
                 Vector3 lateral = Vector3.Cross(tangent, Vector3.up).normalized;
                 Vector3 lift = Vector3.Cross(lateral, tangent).normalized;
-                float len = 0.85f * Mathf.Pow(Mathf.Sin(Mathf.PI * Mathf.Min(1f, s * 1.05f)), 0.55f) + 0.1f;
+                // Max(0): sin(pi) comes out a hair below zero in float, and Pow of a negative is NaN.
+                float len = 0.85f * Mathf.Pow(Mathf.Max(0f, Mathf.Sin(Mathf.PI * Mathf.Min(1f, s * 1.05f))), 0.55f) + 0.1f;
                 foreach (float side in new[] { -1f, 1f })
                 {
                     // Leaflet: out to the side, raised in a V, swept forward towards the tip.
