@@ -82,7 +82,8 @@ namespace Solmar
                 gameObject.AddComponent<AudioListener>();
             }
 
-            rngState = (uint)GetInstanceID() ^ 0x9E3779B9u;
+            // A different seed each run (GetInstanceID is gone in newer Unity versions).
+            rngState = (uint)System.Environment.TickCount ^ 0x9E3779B9u;
             if (rngState == 0u)
             {
                 rngState = 0x9E3779B9u;
