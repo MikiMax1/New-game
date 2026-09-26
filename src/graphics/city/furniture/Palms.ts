@@ -11,7 +11,7 @@
 // leaflets glow yellow-green, which is most of what makes palms look alive at golden hour.
 import { cameraPosition, float, max, mix, normalize, positionWorld, pow, uniform, vec3 } from 'three/tsl';
 import { BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, MeshPhysicalNodeMaterial, Vector3, type Group } from 'three/webgpu';
-import { lathe, merge } from '../geometry';
+import { bevelBox, lathe, merge } from '../geometry';
 import type { CityContext } from '../context';
 
 interface Mesher {
@@ -117,7 +117,14 @@ export interface PalmSet {
   dead: BufferGeometry;
   stems: BufferGeometry;
   nuts: BufferGeometry;
+  /** Tree pits: granite edging, the soil and mulch bed, and low ground cover. */
+  edging: BufferGeometry;
+  soil: BufferGeometry;
+  cover: BufferGeometry;
 }
+
+/** Side of a tree pit's opening in the pavement, metres (the edging adds 8 cm all round). */
+const PIT = 1.4;
 
 /** Grows palms at the given bases (world positions on the pavement). */
 export function growPalms(bases: Vector3[], random: () => number): PalmSet {
@@ -126,7 +133,11 @@ export function growPalms(bases: Vector3[], random: () => number): PalmSet {
   const dead: Mesher = { pos: [], idx: [], uv: [] };
   const stems: Mesher = { pos: [], idx: [], uv: [] };
   const nuts: BufferGeometry[] = [];
+  const edging: BufferGeometry[] = [];
+  const soil: BufferGeometry[] = [];
+  const cover: Mesher = { pos: [], idx: [], uv: [] };
   for (const base of bases) {
+    treePit(base, edging, soil, cover, random);
     const height = 8 + random() * 4;
     const leanDir = random() * Math.PI * 2;
     const lean = 0.3 + random() * 0.9;
@@ -173,7 +184,59 @@ export function growPalms(bases: Vector3[], random: () => number): PalmSet {
       nuts.push(nut.translate(top.x + Math.cos(a) * 0.22, top.y - 0.15 - random() * 0.15, top.z + Math.sin(a) * 0.22));
     }
   }
-  return { trunks: finish(trunks), leaves: finish(leaves), dead: finish(dead), stems: finish(stems), nuts: merge(nuts, false) };
+  return {
+    trunks: finish(trunks),
+    leaves: finish(leaves),
+    dead: finish(dead),
+    stems: finish(stems),
+    nuts: merge(nuts, false),
+    edging: merge(edging, false),
+    soil: merge(soil, false),
+    cover: finish(cover),
+  };
+}
+
+/**
+ * A tree pit around a palm: an opening in the pavement edged with granite setts, a bed of soil and
+ * bark mulch a few centimetres below the paving, and clumps of low ground cover (mondo grass).
+ */
+function treePit(base: Vector3, edging: BufferGeometry[], soil: BufferGeometry[], cover: Mesher, random: () => number): void {
+  const h = PIT / 2;
+  const e = 0.08;
+  // Edging: four granite kerbs, 3 cm proud of the paving.
+  for (const [cx, cz, sx, sz] of [
+    [0, -h - e / 2, PIT + 2 * e, e],
+    [0, h + e / 2, PIT + 2 * e, e],
+    [-h - e / 2, 0, e, PIT],
+    [h + e / 2, 0, e, PIT],
+  ] as const) {
+    edging.push(bevelBox(sx, 0.2, sz, 0.012).translate(base.x + cx, base.y - 0.07, base.z + cz));
+  }
+  // Soil and mulch: a bed filling the opening, just over the paving under it and 2.5 cm below
+  // the edging's top, so it reads as a pit.
+  soil.push(bevelBox(PIT, 0.1, PIT, 0.02).translate(base.x, base.y - 0.045, base.z));
+  // Ground cover: tufts of narrow arching blades.
+  const tufts = 14;
+  for (let t = 0; t < tufts; t++) {
+    const a = (t / tufts) * Math.PI * 2 + random();
+    const r = 0.28 + random() * 0.32;
+    const cx = base.x + Math.max(-h + 0.12, Math.min(h - 0.12, Math.cos(a) * r));
+    const cz = base.z + Math.max(-h + 0.12, Math.min(h - 0.12, Math.sin(a) * r));
+    for (let k = 0; k < 26; k++) {
+      const dir = random() * Math.PI * 2;
+      const len = 0.24 + random() * 0.2;
+      const lean = 0.35 + random() * 0.5;
+      const b = cover.pos.length / 3;
+      const dx = Math.cos(dir);
+      const dz = Math.sin(dir);
+      const w = 0.006;
+      cover.pos.push(cx - dz * w, base.y, cz + dx * w);
+      cover.pos.push(cx + dz * w, base.y, cz - dx * w);
+      cover.pos.push(cx + dx * len * lean, base.y + len * (1 - lean * 0.5), cz + dz * len * lean);
+      cover.uv.push(0, 0, 1, 0, 0.5, 1);
+      cover.idx.push(b, b + 1, b + 2);
+    }
+  }
 }
 
 /** Palm materials: bark, living leaves (translucent against the sun), dead fronds, coconuts. */
@@ -188,7 +251,16 @@ export function palmMeshes(set: PalmSet, ctx: CityContext, group: Group): void {
   const deadLeaf = new MeshPhysicalNodeMaterial({ name: 'Dead frond', color: new Color(0.33, 0.24, 0.13), roughness: 0.85, side: DoubleSide });
   const stem = new MeshPhysicalNodeMaterial({ name: 'Palm stem', color: new Color(0.2, 0.22, 0.09), roughness: 0.7 });
   const nut = new MeshPhysicalNodeMaterial({ name: 'Coconut', color: new Color(0.2, 0.2, 0.06), roughness: 0.6 });
+  const granite = new MeshPhysicalNodeMaterial({ name: 'Granite edging', color: new Color(0.3, 0.3, 0.31), roughness: 0.6 });
+  const mulch = new MeshPhysicalNodeMaterial({ name: 'Bark mulch', color: new Color(0.13, 0.08, 0.05), roughness: 0.95 });
+  // Mulch: chunky bark pieces, varying in tone.
+  mulch.colorNode = vec3(0.13, 0.08, 0.05).mul(mix(float(0.6), float(1.3), positionWorld.x.mul(23.1).sin().mul(positionWorld.z.mul(19.7).sin()).mul(0.5).add(0.5)));
+  const grass = new MeshPhysicalNodeMaterial({ name: 'Ground cover', color: new Color(0.05, 0.11, 0.03), roughness: 0.6, side: DoubleSide });
+  grass.emissiveNode = vec3(0.22, 0.32, 0.08).mul(backlight.mul(0.35));
   const parts: [BufferGeometry, MeshPhysicalNodeMaterial, string][] = [
+    [set.edging, granite, 'Tree pit edging'],
+    [set.soil, mulch, 'Tree pit mulch'],
+    [set.cover, grass, 'Ground cover'],
     [set.trunks, bark, 'Palm trunks'],
     [set.leaves, leaf, 'Palm leaves'],
     [set.dead, deadLeaf, 'Dead fronds'],
