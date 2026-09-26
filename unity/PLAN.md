@@ -1,101 +1,127 @@
-# Project SOLMAR in Unity 6 HDRP: Plan
+# Project SOLMAR: Roadmap to a complete game (Unity 6 HDRP)
 
-The browser plan (`../DEVELOPMENT_PLAN.md`, v4) rewritten for Unity 6 HDRP. Many things the browser
-version had to build by hand, HDRP already includes: the physical sky, volumetric clouds and fog,
-SSR, SSGI, GTAO, PCSS shadows, decals, TAA/DLSS, and exposure. The work here is to configure those
-features well, generate the world, and keep each step small enough to finish and check in one sitting.
+**Goal:** a realistic, fully playable open-world crime game set in a Miami-style city, in the
+spirit of GTA VI. You walk, drive, fight and do missions in a living city with traffic, people,
+police, day and night, and weather.
 
-**Rules for every model and surface:** real dimensions, bevelled edges, PBR materials with wear and
-dirt, and LODs. Everything stays procedural (no imported assets) unless a step says otherwise.
+## Honest scope
 
-**Every step ends with** a compile check with 0 errors and 0 warnings, the screenshots from
-**Solmar > Capture Spot Screenshots**, and a note of what to copy into the local RealisticGame project.
+GTA VI was made by roughly 2,000 people over about ten years, so an exact match isn't realistic.
+What is realistic is a **compact, polished open world**: about 3 × 3 km with downtown, a beach
+strip, neighbourhoods, a port and a highway. It has drivable cars, traffic, pedestrians, police,
+a phone and map, and a short story with side activities. It should look as close to real life as
+HDRP allows.
+
+| Claude can build in code | Needs art from outside (you choose, I integrate) |
+|---|---|
+| The whole city layout: roads, blocks, intersections, sidewalks, medians, beach, water, bridges | **Realistic people**: body models and animations. Free: Mixamo (needs your Adobe login). Paid: Asset Store character packs or Reallusion |
+| Buildings and interiors behind windows, street furniture, road markings | **Hero cars at GTA level**: procedural cars look good parked or at a distance. Close-up realism needs bought models (about $20–60 a car on the Asset Store) |
+| Game systems: driving physics, traffic AI, pedestrians, police, missions, HUD, map, save/load, menus | **Photo-scanned textures**: free CC0 from Poly Haven and ambientCG. Needs those sites allowed in this environment's network settings, or you download them |
+| Lighting, sky, weather, water, performance, quality presets | **Voice acting and music**: optional; text and synth sound work until then |
+| Procedural palms, trees, hedges and grass (good at street distance) | Close-up vegetation: SpeedTree or an Asset Store palm pack, optional |
+
+**How I work:** small steps, each one playable. After each step you playtest and send screenshots
+and F3 numbers. Updates reach RealisticGame by themselves (Solmar > Auto Update). I do the work
+myself and only use sub-agents for big, separable jobs, to save your usage.
 
 ---
 
-## Done
+## Done so far
 
-| Area | What exists (`Assets/Solmar/`) |
-|---|---|
-| Street scene | A procedural downtown street at golden hour after rain, with a crowned road, kerbs, decals, puddles and a wet clear coat |
-| Buildings | Art Deco, MiMo, classic and glass towers, with interior rooms behind the windows and lit shopfronts |
-| Props | Street lamps, signals, hydrants, bins, pay stations, signs, drains, manholes, roadworks, palms in tree pits |
-| Lighting | Physically Based Sky, volumetric clouds and fog, a 120 klx sun, 4096² PCSS, a reflection probe; **Solmar > Configure HDRP Asset** turns these on |
-| Camera | Physical camera, auto exposure, ACES, SSR, GTAO, bloom, DoF, grain |
-| Controls | Fly and walk (`F`), time of day (`[` `]` `T`), `F2` screenshots |
-| Sound | Synthesised city ambience |
-| Parked cars | Sedan, hatchback, SUV, pickup and taxi in both parking lanes (A1, first pass: needs a look in the Editor) |
-| Street details | Bus shelter, bus stop sign, benches, bollards, newspaper boxes, bike rack (A2, first pack) |
-| Presets and F3 | Low to Extreme presets (`F5`), no frame cap by default with an optional cap (`F6`), F3 overlay with fps, 1% low, CPU/GPU ms, draw calls and a frame-time graph (B1 and B2 in part; upscaling still to do) |
+- One downtown street at golden hour, with wet asphalt, puddles, decals and kerbs.
+- Buildings (Art Deco, MiMo, classic, glass towers) with rooms behind the windows.
+- Street lamps, signals, hydrants, a bus shelter, benches, bollards, news boxes, parked cars, palms.
+- Physical sky, volumetric clouds and fog, soft shadows, reflections, synthesised city sound.
+- Fly and walk cameras, time of day, screenshots, Low to Extreme presets, no fps cap, the F3 overlay.
+- Auto-update into your Unity project, and a guard against broken meshes.
 
-## Next, in order (small steps)
-
-### A. Finish the street
-| # | Work | Done when |
-|---|---|---|
-| A1 | **Parked cars**: 3–4 procedural body types (sedan, SUV, taxi, pickup) with bevelled panels, glass, wheels, lights; car-paint material (HDRP StackLit or Lit with clear coat and flakes); placed only in parking lanes | Cars on both kerbs with no overlaps; reflections read on the paint |
-| A2 | **Street details**, one small pack at a time: bus stop, benches, newspaper boxes, parking meters, bollards, then overhead wires with sag, then gutter litter and leaves as decals | Each pack is its own commit |
-| A3 | **Street audit**: an editor test that fails on floating, sunk or overlapping objects, and on cars outside parking lanes | Runs from the Test Runner |
-
-### B. Core for a bigger world
-| # | Work |
-|---|---|
-| B1 | **Quality presets** Low to **Extreme** as HDRP quality levels plus Volume profiles; no frame cap (`vSyncCount = 0`, `targetFrameRate = -1`), with an optional cap (60/120/144/165/240); DLSS/FSR upscaling and dynamic resolution |
-| B2 | **F3 overlay**: fps, 1% lows, CPU and GPU ms (FrameTimingManager), draw calls, triangles and memory |
-| B3 | **Tiles and streaming**: the world in 256 m tiles generated off the main thread (Jobs and Burst), with HLOD rings (full detail < 250 m, simplified < 1 km, merged blocks < 3 km, impostors beyond) |
-| B4 | **GPU instancing** for props, cars and vegetation (GPU Resident Drawer and GPU occlusion culling in Unity 6) |
-
-### C. The map
-| # | Work |
-|---|---|
-| C1 | Import real street layouts from **OpenStreetMap** (Brickell, South Beach, Little Havana, Coral Gables, Wynwood, the port) with an editor tool, into a ~6 × 6 km fictional Port Solmar; all names changed and ODbL attribution added. Needs network access to `overpass-api.de` |
-| C2 | Terrain: flat Florida ground, canals, seawalls, dunes, mangroves (Unity Terrain or a generated heightfield mesh) |
-| C3 | Roads from real widths and lane counts: intersections, medians, crosswalks, ramps, bridges |
-| C4 | Lots: yards, driveways, pools, fences, parking lots, plazas, the beach and boardwalk |
-| C5 | Variety rules per district, and landmarks every few blocks |
-
-### D. Lighting and atmosphere (HDRP features, tuned)
-| # | Work |
-|---|---|
-| D1 | Sun from real solar position (have it in `TimeOfDay`), plus a moon, stars and night sky |
-| D2 | SSGI or ray-traced GI on Extreme; Adaptive Probe Volumes baked per tile for bounce light |
-| D3 | Night: every street light, window, sign and car light as a real light near the camera, with volumetric light in the haze |
-| D4 | Volumetric cloud presets (cumulus, cumulonimbus, stratus, cirrus) that change through the day, and cloud shadows |
-| D5 | Weather: clear, humid, overcast, rain, thunderstorm; wet roads that dry; rain VFX and lightning |
-| D6 | Colour: a grade matched to the GTA VI trailer look (warm highlights, teal shade, saturated sunsets) |
-
-### E. Materials and water
-| # | Work |
-|---|---|
-| E1 | Anti-tiling (stochastic sampling and macro variation) in the procedural texture sets |
-| E2 | More decals: cracks, patches, oil, tyre marks, paint wear, graffiti, dirt at wall bases |
-| E3 | Puddles that fill in rain and dry afterwards |
-| E4 | **HDRP Water System** for the bay and the ocean, with foam, caustics and boat wakes |
-
-### F. Models
-| # | Work |
-|---|---|
-| F1 | Buildings: a modular facade kit (sills, balconies, cornices, awnings, A/C units, fire escapes, neon), roofs, district styles, ~40 landmarks, weathering |
-| F2 | Vehicles: ~20 types with full detail and interiors; wheels that spin, steer and compress; 3 LODs |
-| F3 | Vegetation: more palm species, live oaks, hedges, grass near the camera; wind; leaves lit from behind |
-| F4 | People: models with varied clothing and animation (Mixamo clips need your Adobe login) |
-
-### G. Life and gameplay
-| # | Work |
-|---|---|
-| G1 | Traffic with lanes, signals and junctions |
-| G2 | Third-person player: walk, run, jump, swim |
-| G3 | Driving with Unity's WheelCollider physics, and chase and hood cameras |
-| G4 | Audio: engines by RPM, ambience by district, rain, radio |
-| G5 | Police and wanted levels, missions, phone, GPS map, save and load |
-
-### H. Extreme preset (strong PCs)
-Full-resolution volumetric clouds and SSGI (or ray tracing), 4096² shadows to 2 km, contact shadows
-everywhere, detail rings doubled, volumetric light from every light, and optional DoF, motion blur and lens flares.
+**What's wrong now (from your playtest):** it's one straight road that ends in nothing, and the
+palms stand in concrete. Phases 1 and 2 fix both.
 
 ---
 
-## What I need from Max
-1. After each step, the screenshots from **Solmar > Capture Spot Screenshots** and your F3 numbers.
-2. For step C1: network access to `overpass-api.de` (or Full) in this environment's settings.
-3. Your GPU and RAM, to set the preset targets.
+## Phase 1: Streets that look right (small, starts now)
+
+| # | Work |
+|---|---|
+| 1.1 | **Palms in soil, not concrete.** A landscaped median with grass, shrubs and royal palms; grass swales between the kerb and the sidewalk on residential streets; raised stone planters with ground cover downtown. No palm in bare paving |
+| 1.2 | Close the street ends: a T-junction with cross streets and buildings, so there's no void |
+| 1.3 | Scene tidy-up: hide the editor grid and gizmos in the Game view, a default camera at eye level, and a small help overlay (`H`) listing the keys |
+
+## Phase 2: A real city layout
+
+| # | Work |
+|---|---|
+| 2.1 | **Road network generator**: a graph of streets (grid downtown, curving roads in the suburbs, avenues with medians) that builds every road, intersection, crosswalk, kerb ramp, lane marking and signal from the graph |
+| 2.2 | **Blocks and lots**: split the space between roads into blocks, then lots; buildings fill lots by district (towers, Art Deco hotels, shops, houses with yards, pools and fences, warehouses, parking lots) |
+| 2.3 | **Streaming**: the city in 200 m tiles built off the main thread and loaded around the player, with levels of detail (full < 250 m, simple < 1 km, merged blocks beyond) |
+| 2.4 | **First district, 1 × 1 km downtown**: playable end to end |
+| 2.5 | **Coast**: beach, dunes, boardwalk and lifeguard towers; ocean and bay with HDRP Water (waves, foam, caustics) |
+| 2.6 | **More districts**: South Beach-style Art Deco strip, Little Havana-style shops, suburbs, port with cranes and containers, Wynwood-style murals; causeway bridges and an elevated highway loop. Target 3 × 3 km |
+| 2.7 | Optional: real street layouts from **OpenStreetMap** (renamed), needs `overpass-api.de` allowed |
+
+## Phase 3: The player
+
+| # | Work |
+|---|---|
+| 3.1 | Third-person character controller: walk, run, sprint, jump, climb low walls, swim; an orbit camera with collision |
+| 3.2 | A placeholder character first, then a realistic one with animations. **Needs you**: Mixamo clips or a character pack |
+| 3.3 | Health, stamina, ragdoll on falls and hits |
+
+## Phase 4: Driving
+
+| # | Work |
+|---|---|
+| 4.1 | Car physics on WheelColliders: engine and gear curves, grip by surface, handbrake, drifts; chase, bonnet and interior cameras |
+| 4.2 | Get in and out of any car (steal parked ones), with door and seat animations once the character is in |
+| 4.3 | Damage: dents, broken glass and lights, smoke, fire |
+| 4.4 | Vehicle set: 10–15 procedural types (sedans, SUVs, sports cars, taxi, police, bus, trucks, bikes, boats). Optional: swap in bought hero models |
+| 4.5 | Car radio stations (synthesised music at first) |
+
+## Phase 5: A living city
+
+| # | Work |
+|---|---|
+| 5.1 | **Traffic AI** on the road graph: lanes, signals, turns, yielding, lane changes, no pile-ups; reacts to the player |
+| 5.2 | **Pedestrians**: walk the sidewalks and crossings, wait at lights, sit on benches, flee from danger, crowd density by district and hour |
+| 5.3 | Night: every street light, window, sign and headlight is a light source; neon districts |
+| 5.4 | Weather: clear, humid, overcast, rain and thunderstorms; wet roads that dry; rain on cars |
+| 5.5 | City sound: engines by RPM, horns, sirens, crowds, waves, rain, by district and time |
+
+## Phase 6: Gameplay
+
+| # | Work |
+|---|---|
+| 6.1 | **HUD**: minimap with GPS route, health, money, wanted stars |
+| 6.2 | **Police and wanted level**: crimes raise heat; patrols, chases, roadblocks, helicopters; escape by breaking line of sight |
+| 6.3 | Weapons and combat: aim, cover, hit reactions (weapon models procedural at first) |
+| 6.4 | **Phone**: contacts, missions, map, camera |
+| 6.5 | **Missions framework**: scripted objectives, checkpoints, cutscene cameras, fail and retry |
+| 6.6 | Story: 10–15 missions over a short arc, plus side activities (street races, taxi jobs, deliveries, stunt jumps) |
+| 6.7 | Money, shops (clothes, cars, safehouse), save and load, pause menu, settings (graphics, controls, audio), gamepad support |
+
+## Phase 7: The "insane touchups" (continuous, and a big pass at the end)
+
+| # | Work |
+|---|---|
+| 7.1 | Photo-scanned textures with anti-tiling; dirt, cracks, oil, litter and tyre marks as decals |
+| 7.2 | Ray-traced reflections, GI and shadows on Extreme (RTX GPUs); DLSS or FSR upscaling |
+| 7.3 | Cinematic colour grade matched to the GTA VI trailer look; lens effects; photo mode |
+| 7.4 | Close-up detail: parallax bricks and pavers, interiors you can enter in key buildings, detailed car interiors |
+| 7.5 | Performance: target 60+ fps at 1440p on High on a mid-range RTX card, and uncapped on Extreme for strong PCs; automatic tests for floating or overlapping objects |
+
+---
+
+## First concrete steps
+
+1. **1.1 Palms in soil**: median, swales and planters on the current street.
+2. **1.2 Close the street ends** with cross streets.
+3. **2.1 Road network generator**, then 2.2 blocks, giving a first grid of about 4 × 4 blocks you can walk and fly around.
+
+Each step: compile check, push, auto-update into your Unity, you playtest.
+
+## What I need from you
+
+1. Screenshots and F3 numbers after each step.
+2. By Phase 3: your choice of character source (Mixamo, which is free, or a paid pack).
+3. Optional, any time: allow `polyhaven.com`, `dl.polyhaven.org`, `ambientcg.com` (textures) and `overpass-api.de` (real maps) in this environment's network settings.
