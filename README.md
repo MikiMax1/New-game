@@ -53,22 +53,28 @@ older WebGL renderer until the world moves over.
 
 ## Photoreal showcase
 
-`showcase.html` is a rain-soaked street corner built only from photo-scanned assets, to develop the look the city
-is heading for. Code is in `src/graphics/`.
+`showcase.html` is a downtown street at golden hour after rain, generated entirely in code: there
+are no model, image or HDRI files. Code is in `src/graphics/`.
 
-- **Assets:** high-poly glTF models and 2K scanned PBR texture sets from Poly Haven (CC0), and the Khronos Car Concept
-  (CC-BY 4.0). They are downloaded, not committed:
-  - `npm run assets` fetches about 370 MB and optimises it to about 140 MB in `public/content/`.
-  - Credits are written to `public/content/CREDITS.md`.
-- **Lighting:** a photographed HDR sky for image-based light and reflections. The sun is found in the HDRI and moved
-  into a shadow-casting light (4096² soft shadows), so shadows are sharp and the light matches the photo.
-- **Materials:** everything is `MeshPhysicalMaterial` (the node version), including:
-  - wet asphalt with puddles in the low spots of the scan;
-  - metallic car paint under a clear coat;
-  - tinted glass.
-- **Camera:** GTAO, screen-space reflections, temporal anti-aliasing, bokeh depth of field, bloom, chromatic
-  aberration, a lens vignette, a colour grade and ACES filmic tone mapping.
-- **Screenshot:** `npm run capture-screenshot` renders the scene headless into `docs/screens/showcase/street.png`.
+- **Textures:** 2048² seamless PBR maps (albedo, normal, AO/roughness/metalness, height) baked on
+  the GPU at startup from periodic simplex, fBm and Worley noise: asphalt, pavement, architectural
+  concrete, stucco, metal and glass.
+- **Sky and light:** a Preetham atmosphere (three's `SkyMesh`) with a golden-hour sun and 4096²
+  shadows; the sky and a street-level reflection probe are rendered into float cube maps and
+  pre-filtered for image-based light.
+- **Street:** a crowned road draining to the gutters, 15 cm kerbs, kerb ramps, puddles in the
+  wheel-path ruts with rain ripples, worn markings, a zebra crossing, tar snakes and patches.
+- **City:** Art Deco, MiMo, classic and glass-tower buildings with recessed windows and rooms behind
+  the glass (interior mapping), plus street lamps, traffic signals, palms, hydrants, roadworks
+  and more, all modelled from real dimensions.
+- **Camera:** GTAO, screen-space reflections, temporal anti-aliasing, bokeh depth of field, bloom,
+  chromatic aberration, a lens vignette, colour grade, film grain and ACES filmic tone mapping.
+- **Screenshot:** `npm run capture-screenshot` renders it headless into
+  `docs/screens/showcase/street.png`.
+- **URL parameters:**
+  - `?spot=hero|crossing|puddle|facades` picks a camera position;
+  - `?sun=elevation,azimuth` moves the sun;
+  - `?textures=0` renders flat colours instead of baked textures.
 
 ## Development
 
