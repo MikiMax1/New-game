@@ -1,0 +1,472 @@
+// Runtime PBR texture generation for the procedural city (see ProceduralTextures.cs).
+//
+// Seamless material maps baked from periodic noise: every noise is periodic over the texture's
+// UV square with integer periods, so the maps tile without seams.
+//
+//   psrdnoise2  periodic simplex noise with its analytic gradient (Gustavson & McEwan 2022,
+//               "Tiling simplex noise and flow noise in two and three dimensions", JCGT 11(1))
+//   fbm         octaves of psrdnoise2 (value and gradient)
+//   worley      periodic Worley (cellular) noise: F1, F2 and a random id for the nearest cell
+//
+// Kernels, run in order for each texture set:
+//   Fields   height in metres (R) and three masks (G, B, A), half float
+//   Normals  tangent-space normals from the height field's slopes (Sobel, physical scale)
+//   Albedo   base colour, linear
+//   Mask     HDRP mask map: metallic (R), ambient occlusion (G), detail mask (B), smoothness (A)
+// plus the decal textures:
+//   PaintWear  road paint: white, alpha worn away in patches (tinted by the decal material)
+//   Puddle     one puddle: base colour (darkening), mask (smoothness) or normal (flat water)
+
+#pragma kernel Fields
+#pragma kernel Normals
+#pragma kernel Albedo
+#pragma kernel Mask
+#pragma kernel PaintWear
+#pragma kernel Puddle
+
+RWTexture2D<float4> _Out;
+Texture2D<float4> _FieldsTex;
+int _Size;
+int _Recipe;
+int _Mode;
+float _Tile;
+float _Seed;
+float4 _Tint;
+
+// Recipes (keep in sync with ProceduralTextures.Recipe).
+#define ASPHALT 0
+#define PAVEMENT 1
+#define CONCRETE 2
+#define STUCCO 3
+#define PAINTED 4
+#define GLASS 5
+#define GRANITE 6
+#define GALVANISED 7
+#define BRUSHED 8
+
+// ── Hashes and noise ───────────────────────────────────────────────────────────────────────
+
+float hash21(float2 p)
+{
+    float3 p3 = frac(float3(p.x, p.y, p.x) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return frac((p3.x + p3.y) * p3.z);
+}
+
+float2 hash22(float2 p)
+{
+    float3 p3 = frac(float3(p.x, p.y, p.x) * float3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return frac((p3.xx + p3.yz) * p3.zy);
+}
+
+float3 mod289(float3 x) { return x - floor(x / 289.0) * 289.0; }
+float3 wrap3(float3 x, float p) { return x - floor(x / p) * p; }
+float2 wrap2(float2 x, float2 p) { return x - floor(x / p) * p; }
+
+// Periodic simplex noise: (value in about [-1, 1], d/dx, d/dy). Periods must be even integers.
+float3 psrdnoise2(float2 x, float2 period, float alpha)
+{
+    float2 uv = float2(x.x + x.y * 0.5, x.y);
+    float2 i0 = floor(uv);
+    float2 f0 = frac(uv);
+    float cmp = step(f0.y, f0.x);
+    float2 o1 = float2(cmp, 1.0 - cmp);
+    float2 v0 = float2(i0.x - i0.y * 0.5, i0.y);
+    float2 v1 = float2(v0.x + o1.x - o1.y * 0.5, v0.y + o1.y);
+    float2 v2 = float2(v0.x + 0.5, v0.y + 1.0);
+    float2 x0 = x - v0;
+    float2 x1 = x - v1;
+    float2 x2 = x - v2;
+    float3 xw = wrap3(float3(v0.x, v1.x, v2.x), period.x);
+    float3 yw = wrap3(float3(v0.y, v1.y, v2.y), period.y);
+    float3 iu = floor(xw + 0.5 * yw + 0.5);
+    float3 iv = floor(yw + 0.5);
+    float3 h = mod289(iu);
+    h = mod289((h * 51.0 + 2.0) * h + iv);
+    h = mod289((h * 34.0 + 10.0) * h);
+    float3 psi = h * 0.07482 + alpha;
+    float3 gx = cos(psi);
+    float3 gy = sin(psi);
+    float2 g0 = float2(gx.x, gy.x);
+    float2 g1 = float2(gx.y, gy.y);
+    float2 g2 = float2(gx.z, gy.z);
+    float3 w = max(0.8 - float3(dot(x0, x0), dot(x1, x1), dot(x2, x2)), 0.0);
+    float3 w2 = w * w;
+    float3 w4 = w2 * w2;
+    float3 gdotx = float3(dot(g0, x0), dot(g1, x1), dot(g2, x2));
+    float n = dot(w4, gdotx);
+    float3 dw = -8.0 * w2 * w * gdotx;
+    float2 dn = w4.x * g0 + dw.x * x0 + w4.y * g1 + dw.y * x1 + w4.z * g2 + dw.z * x2;
+    return 10.9 * float3(n, dn);
+}
+
+// fBm over the tile's UV square: value (about [-1, 1]) and gradient with respect to UV.
+float3 fbm(float2 st, float2 period, int octaves, float gain, float seed)
+{
+    float3 sum = 0;
+    float amp = 1;
+    float norm = 0;
+    for (int k = 0; k < octaves; k++)
+    {
+        float2 f = period * exp2((float)k);
+        float3 n = psrdnoise2(st * f, f, seed * 1.618 + k * 2.39);
+        sum += float3(n.x, n.y * f.x, n.z * f.y) * amp;
+        norm += amp;
+        amp *= gain;
+    }
+    return sum / norm;
+}
+
+float unit01(float v) { return v * 0.5 + 0.5; }
+
+// Periodic Worley noise at p (cells): (F1, F2, id of the nearest cell, 0).
+float4 worley(float2 p, float2 period, float jitter, float seed)
+{
+    float2 i = floor(p);
+    float2 f = frac(p);
+    float f1 = 8.0;
+    float f2 = 8.0;
+    float id = 0.0;
+    for (int dy = -1; dy <= 1; dy++)
+    {
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            float2 o = float2(dx, dy);
+            float2 cell = wrap2(i + o, period) + seed * float2(17.13, 31.71);
+            float2 r = hash22(cell);
+            float2 v = o + (r - 0.5) * jitter + 0.5 - f;
+            float d = dot(v, v);
+            if (d < f1)
+            {
+                f2 = f1;
+                f1 = d;
+                id = hash21(cell + 7.7);
+            }
+            else if (d < f2)
+            {
+                f2 = d;
+            }
+        }
+    }
+    return float4(sqrt(f1), sqrt(f2), id, 0.0);
+}
+
+float4 worleyTile(float2 st, float2 cells, float jitter, float seed)
+{
+    return worley(st * cells, cells, jitter, seed);
+}
+
+// Round stones from Worley cells: (mask, dome 0..1, stone id).
+float3 stones(float2 st, float cells, float seed, float fill)
+{
+    float4 w = worleyTile(st, float2(cells, cells), 0.85, seed);
+    float r = fill + w.z * 0.14;
+    float d = w.x / r;
+    float mask = 1.0 - smoothstep(0.8, 1.0, d);
+    float dome = sqrt(max(1.0 - d * d, 0.0));
+    return float3(mask, dome, w.z);
+}
+
+// Anti-aliased line of half-width w (in UV units) at distance d.
+float lineMask(float d, float w)
+{
+    return 1.0 - smoothstep(w * 0.7, w * 1.3, abs(d));
+}
+
+// ── Recipes: fields ────────────────────────────────────────────────────────────────────────
+
+float4 FieldsOf(int recipe, float2 st)
+{
+    if (recipe == ASPHALT)
+    {
+        // Bitumen binder with exposed aggregate (two stone sizes), worn smooth by traffic.
+        float3 coarse = stones(st, 170.0, 1.0, 0.34);
+        float3 fine = stones(st, 480.0, 2.0, 0.3);
+        float binder = fbm(st, float2(64, 64), 4, 0.5, 3.0).x * 0.0006 + fbm(st, float2(512, 512), 2, 0.5, 4.0).x * 0.0002;
+        float top = max(coarse.y * coarse.x * 0.0032, fine.y * fine.x * 0.0016);
+        // Cracks: cell edges on a noise-warped domain, thin, only where a slow field allows.
+        float3 warp = fbm(st, float2(8, 8), 3, 0.5, 9.0);
+        float4 cracks = worleyTile(st + float2(warp.x, warp.y * 0.002) * 0.035, float2(6, 6), 1.0, 7.0);
+        float sparse = smoothstep(0.62, 0.8, unit01(fbm(st, float2(4, 4), 3, 0.5, 8.0).x));
+        float crack = (1.0 - smoothstep(0.003, 0.018, cracks.y - cracks.x)) * sparse;
+        float height = binder + top - crack * 0.005;
+        float stoneMask = max(coarse.x, fine.x * 0.8);
+        float id = coarse.x > 0.5 ? coarse.z : fine.z;
+        return float4(height, stoneMask, crack, id);
+    }
+    if (recipe == PAVEMENT)
+    {
+        // Broom-finished concrete slabs, 1.5 m square (the tile holds 2 × 2) with sawn joints.
+        float broom = fbm(st, float2(4, 480), 3, 0.5, 21.0).x * 0.00035;
+        float4 pits = worleyTile(st, float2(390, 390), 1.0, 22.0);
+        float pit = (1.0 - smoothstep(0.05, 0.16, pits.x)) * step(0.55, pits.z);
+        float4 gumCells = worleyTile(st, float2(34, 34), 1.0, 23.0);
+        float gum = (1.0 - smoothstep(0.15, 0.2, gumCells.x)) * step(0.93, gumCells.z);
+        float undulation = fbm(st, float2(2, 2), 3, 0.5, 25.0).x * 0.0015;
+        float2 slab = frac(st * 2.0);
+        float jointDist = min(min(slab.x, 1.0 - slab.x), min(slab.y, 1.0 - slab.y)) * 1.5;
+        float joint = 1.0 - smoothstep(0.003, 0.005, jointDist);
+        float height = broom + undulation - pit * 0.0012 + gum * 0.0006 - joint * 0.005;
+        return float4(height, gum, joint, hash21(floor(st * 2.0) + 3.1));
+    }
+    if (recipe == CONCRETE)
+    {
+        // Architectural concrete: two 1.2 × 2.4 m formwork panels per tile, seams, tie holes on a
+        // 600 mm grid 300 mm in from the panel edges, bug holes, blotches.
+        float panelU = frac(st.x * 2.0);
+        float panelId = floor(st.x * 2.0);
+        float seamDist = min(min(panelU, 1.0 - panelU) * 1.2, min(st.y, 1.0 - st.y) * 2.4);
+        float seam = 1.0 - smoothstep(0.0015, 0.004, seamDist);
+        float px = panelU * 1.2;
+        float py = st.y * 2.4;
+        float hx = abs(frac((px - 0.3) / 0.6 + 0.5) - 0.5) * 0.6;
+        float hy = abs(frac((py - 0.3) / 0.6 + 0.5) - 0.5) * 0.6;
+        float holeR = length(float2(hx, hy));
+        float hole = 1.0 - smoothstep(0.011, 0.0135, holeR);
+        float holeDepth = (1.0 - smoothstep(0.0, 0.0135, holeR)) * 0.012;
+        float4 bug = worleyTile(st, float2(300, 300), 1.0, 31.0);
+        float bugHole = (1.0 - smoothstep(0.06, 0.2, bug.x)) * step(0.7, bug.z);
+        float surface = fbm(st, float2(8, 8), 5, 0.5, 32.0).x * 0.0008;
+        float height = surface + seam * 0.001 - holeDepth - bugHole * 0.0015;
+        return float4(height, seam, hole, hash21(float2(panelId, 3.7)));
+    }
+    if (recipe == STUCCO)
+    {
+        // Sand-float render: grains, trowel strokes, hairline cracks.
+        float4 grains = worleyTile(st, float2(600, 600), 0.9, 41.0);
+        float grain = (1.0 - smoothstep(0.1, 0.55, grains.x)) * 0.00025;
+        float trowel = fbm(st, float2(6, 6), 3, 0.5, 42.0).x;
+        float fine = fbm(st, float2(160, 160), 3, 0.5, 43.0).x * 0.00018;
+        float4 cracks = worleyTile(st, float2(3, 3), 1.0, 44.0);
+        float crack = (1.0 - smoothstep(0.002, 0.012, cracks.y - cracks.x)) * smoothstep(0.55, 0.75, unit01(fbm(st, float2(2, 2), 3, 0.5, 45.0).x));
+        float height = grain + fine + trowel * 0.0007 - crack * 0.0008;
+        return float4(height, crack, unit01(trowel), grains.z);
+    }
+    if (recipe == PAINTED || recipe == GALVANISED || recipe == BRUSHED)
+    {
+        // Metal: orange-peel paint and a few dents; masks for brush streaks, spangle and chips.
+        float peel = fbm(st, float2(48, 48), 3, 0.5, 51.0).x * 0.00002;
+        float4 dents = worleyTile(st, float2(4, 4), 1.0, 52.0);
+        float dent = (1.0 - smoothstep(0.0, 0.35, dents.x)) * step(0.8, dents.z) * -0.0004;
+        float streak = unit01(fbm(st, float2(2, 900), 3, 0.5, 53.0).x);
+        float spangle = worleyTile(st, float2(26, 26), 1.0, 54.0).z;
+        float chips = smoothstep(0.7, 0.74, unit01(fbm(st, float2(8, 8), 6, 0.5, 55.0).x));
+        float h = recipe == BRUSHED ? (streak - 0.5) * 0.00003 : peel + dent - chips * 0.00008;
+        return float4(h, streak, spangle, chips);
+    }
+    if (recipe == GLASS)
+    {
+        float wave = fbm(st, float2(2, 2), 3, 0.5, 61.0).x * 0.00012;
+        float smudge = smoothstep(0.55, 0.75, unit01(fbm(st, float2(6, 6), 5, 0.5, 62.0).x));
+        float streaks = smoothstep(0.62, 0.8, unit01(fbm(st, float2(40, 2), 4, 0.5, 63.0).x)) * smoothstep(0.3, 0.9, 1.0 - st.y);
+        float dust = unit01(fbm(st, float2(64, 64), 3, 0.5, 64.0).x);
+        return float4(wave, smudge, streaks, dust);
+    }
+    // GRANITE: kerb stones, 1.2 m long (a joint at the tile edge), crystals and mica flecks.
+    float4 crystals = worleyTile(st, float2(420, 140), 1.0, 71.0);
+    float jointD = min(st.x, 1.0 - st.x) * 1.2;
+    float kerbJoint = 1.0 - smoothstep(0.002, 0.004, jointD);
+    float gh = fbm(st, float2(16, 6), 4, 0.5, 72.0).x * 0.0006 - kerbJoint * 0.006 + (crystals.y - crystals.x) * 0.0002;
+    return float4(gh, crystals.z, kerbJoint, unit01(fbm(st, float2(4, 2), 3, 0.5, 73.0).x));
+}
+
+// ── Recipes: colour and surface ────────────────────────────────────────────────────────────
+
+float3 AlbedoOf(int recipe, float2 st, float4 f)
+{
+    if (recipe == ASPHALT)
+    {
+        float tone = unit01(fbm(st, float2(6, 6), 4, 0.5, 11.0).x);
+        float3 binder = float3(0.046, 0.045, 0.047) * lerp(0.8, 1.2, tone);
+        float id = f.w;
+        float grey = lerp(0.12, 0.24, frac(id * 7.13));
+        float3 stone = grey * lerp(float3(1, 1, 1), float3(1.08, 1.0, 0.9), step(0.65, id)) * lerp(1.0, 0.45, step(0.88, id));
+        float3 c = lerp(binder, stone, f.y * 0.8);
+        c *= 1.0 - f.z * 0.5;
+        float oil = smoothstep(0.62, 0.78, unit01(fbm(st, float2(3, 3), 5, 0.5, 12.0).x));
+        // Wet: the whole road has just had rain, so it is baked darker (porous asphalt soaks up water).
+        return c * (1.0 - oil * 0.35) * 0.62;
+    }
+    if (recipe == PAVEMENT)
+    {
+        float blotch = unit01(fbm(st, float2(4, 4), 5, 0.5, 26.0).x);
+        float3 base = float3(0.31, 0.3, 0.28) * lerp(0.82, 1.12, blotch) * (0.92 + f.w * 0.16);
+        float4 specks = worleyTile(st, float2(1050, 1050), 1.0, 24.0);
+        float3 speck = lerp(float3(0.7, 0.7, 0.7), float3(1.35, 1.3, 1.2), step(0.7, specks.z)) * lerp(1.0, 0.6, step(0.93, specks.z));
+        float3 c = base * lerp(float3(1, 1, 1), speck, 0.35);
+        c = lerp(c, float3(0.08, 0.08, 0.085), f.y * 0.9);
+        c *= 1.0 - f.z * 0.55;
+        // Damp after rain.
+        return c * 0.75;
+    }
+    if (recipe == CONCRETE)
+    {
+        float blotch = unit01(fbm(st, float2(6, 12), 5, 0.5, 33.0).x);
+        float3 c = float3(0.4, 0.39, 0.37) * lerp(0.86, 1.1, f.w) * lerp(0.8, 1.15, blotch);
+        c *= 1.0 - smoothstep(0.35, 0.5, unit01(fbm(st, float2(2, 40), 3, 0.5, 34.0).x)) * 0.08;
+        c *= 1.0 - f.y * 0.25;
+        return lerp(c, float3(0.07, 0.07, 0.07), f.z * 0.85);
+    }
+    if (recipe == STUCCO)
+    {
+        float blotch = unit01(fbm(st, float2(4, 4), 5, 0.5, 46.0).x);
+        float3 c = float3(0.82, 0.8, 0.76) * lerp(0.9, 1.04, blotch) * lerp(0.97, 1.02, f.w);
+        return c * (1.0 - f.y * 0.35) * _Tint.rgb;
+    }
+    if (recipe == PAINTED)
+    {
+        // Paint over steel: chips show bare metal with rust bleeding into them.
+        float rust = unit01(fbm(st, float2(16, 16), 4, 0.5, 56.0).x);
+        float3 bare = lerp(float3(0.56, 0.57, 0.58), float3(0.3, 0.13, 0.05), smoothstep(0.45, 0.7, rust));
+        float grime = unit01(fbm(st, float2(4, 4), 4, 0.5, 57.0).x);
+        return lerp(_Tint.rgb * lerp(0.9, 1.05, grime), bare, f.w);
+    }
+    if (recipe == GALVANISED)
+    {
+        return float3(0.55, 0.57, 0.58) * (0.9 + f.z * 0.18);
+    }
+    if (recipe == BRUSHED)
+    {
+        return float3(0.62, 0.62, 0.6) * (0.95 + f.y * 0.08);
+    }
+    if (recipe == GLASS)
+    {
+        return float3(0.02, 0.022, 0.025) + float3(0.05, 0.048, 0.045) * (f.y * 0.5 + f.w * 0.2);
+    }
+    // GRANITE: grey with black mica and white feldspar crystals.
+    float3 g = float3(0.34, 0.34, 0.35) * lerp(0.85, 1.1, f.w);
+    g = lerp(g, float3(0.06, 0.06, 0.065), step(0.82, f.y));
+    g = lerp(g, float3(0.62, 0.6, 0.58), step(0.93, f.y) * step(f.y, 0.97));
+    return g * (1.0 - f.z * 0.6) * 0.8;
+}
+
+// (roughness, metalness)
+float2 SurfaceOf(int recipe, float2 st, float4 f, float cavity)
+{
+    if (recipe == ASPHALT)
+    {
+        float oil = smoothstep(0.62, 0.78, unit01(fbm(st, float2(3, 3), 5, 0.5, 12.0).x));
+        float r = lerp(0.72, 0.6, f.y) + f.z * 0.13 - oil * 0.25;
+        // Wet film: smoother overall, water standing in the cavities.
+        r = lerp(r * 0.7, 0.05, saturate(cavity * 1.4 + f.z));
+        return float2(r, 0.0);
+    }
+    if (recipe == PAVEMENT) return float2(lerp(0.84, 0.62, f.y) * 0.8 + cavity * 0.05 - f.z * 0.3, 0.0);
+    if (recipe == CONCRETE) return float2(lerp(0.78, 0.9, f.z) + cavity * 0.05, 0.0);
+    if (recipe == STUCCO) return float2(0.9 - f.z * 0.08 + cavity * 0.04, 0.0);
+    if (recipe == PAINTED) return float2(lerp(_Tint.a + (f.y - 0.5) * 0.08, 0.55, f.w), f.w * 0.6);
+    if (recipe == GALVANISED) return float2(0.28 + f.z * 0.22, 1.0);
+    if (recipe == BRUSHED) return float2(lerp(0.22, 0.42, f.y) + cavity * 0.1, 1.0);
+    if (recipe == GLASS) return float2(0.02 + f.y * 0.12 + f.z * 0.08, 0.0);
+    return float2(0.55 + f.z * 0.2, 0.0);
+}
+
+// ── Kernels ────────────────────────────────────────────────────────────────────────────────
+
+float2 StOf(uint2 id) { return (float2(id) + 0.5) / _Size; }
+
+float4 FieldAt(int2 p)
+{
+    return _FieldsTex[uint2((p + _Size * 4) % _Size)];
+}
+
+[numthreads(8, 8, 1)]
+void Fields(uint3 id : SV_DispatchThreadID)
+{
+    _Out[id.xy] = FieldsOf(_Recipe, StOf(id.xy));
+}
+
+[numthreads(8, 8, 1)]
+void Normals(uint3 id : SV_DispatchThreadID)
+{
+    int2 p = int2(id.xy);
+    float texel = _Tile / _Size;
+    float h00 = FieldAt(p + int2(-1, -1)).r, h10 = FieldAt(p + int2(0, -1)).r, h20 = FieldAt(p + int2(1, -1)).r;
+    float h01 = FieldAt(p + int2(-1, 0)).r, h21 = FieldAt(p + int2(1, 0)).r;
+    float h02 = FieldAt(p + int2(-1, 1)).r, h12 = FieldAt(p + int2(0, 1)).r, h22 = FieldAt(p + int2(1, 1)).r;
+    float gx = (h20 + 2.0 * h21 + h22 - h00 - 2.0 * h01 - h02) / (8.0 * texel);
+    float gy = (h02 + 2.0 * h12 + h22 - h00 - 2.0 * h10 - h20) / (8.0 * texel);
+    float3 n = normalize(float3(-gx, -gy, 1.0));
+    // Unity normal maps: tangent-space, +Y up (OpenGL convention), stored 0..1.
+    _Out[id.xy] = float4(n * 0.5 + 0.5, 1.0);
+}
+
+[numthreads(8, 8, 1)]
+void Albedo(uint3 id : SV_DispatchThreadID)
+{
+    _Out[id.xy] = float4(AlbedoOf(_Recipe, StOf(id.xy), FieldAt(int2(id.xy))), 1.0);
+}
+
+float CavityAt(int2 p, float depth)
+{
+    float here = FieldAt(p).r;
+    float below = 0.0;
+    int radii[3] = { 2, 5, 11 };
+    float weights[3] = { 0.5, 0.3, 0.2 };
+    for (int r = 0; r < 3; r++)
+    {
+        float ring = 0.0;
+        for (int a = 0; a < 8; a++)
+        {
+            float ang = a / 8.0 * 6.2831853 + radii[r];
+            int2 o = int2(round(cos(ang) * radii[r]), round(sin(ang) * radii[r]));
+            ring += FieldAt(p + o).r;
+        }
+        below += max(ring / 8.0 - here, 0.0) * weights[r];
+    }
+    return saturate(below / depth);
+}
+
+[numthreads(8, 8, 1)]
+void Mask(uint3 id : SV_DispatchThreadID)
+{
+    int2 p = int2(id.xy);
+    float depth = _Recipe == ASPHALT ? 0.0025 : _Recipe == PAVEMENT ? 0.0012 : _Recipe == CONCRETE ? 0.003 : _Recipe == STUCCO ? 0.0006 : _Recipe == GRANITE ? 0.002 : 0.0002;
+    float cavity = CavityAt(p, depth);
+    float2 s = SurfaceOf(_Recipe, StOf(id.xy), FieldAt(p), cavity);
+    float ao = 1.0 - cavity * 0.65;
+    // HDRP mask map: metallic, AO, detail mask, smoothness.
+    _Out[id.xy] = float4(s.y, ao, 1.0, 1.0 - saturate(s.x));
+}
+
+[numthreads(8, 8, 1)]
+void PaintWear(uint3 id : SV_DispatchThreadID)
+{
+    float2 st = StOf(id.xy);
+    // Road paint over 1 m of line: worn through in patches and speckled where the glass beads
+    // and the asphalt's stones show through.
+    float wear = unit01(fbm(st, float2(4, 4), 5, 0.55, 81.0).x);
+    float4 grit = worleyTile(st, float2(140, 140), 1.0, 82.0);
+    float speck = step(0.8, grit.z) * (1.0 - smoothstep(0.1, 0.35, grit.x));
+    float alpha = smoothstep(0.25, 0.45, wear) * (1.0 - speck * 0.8);
+    _Out[id.xy] = float4(1.0, 1.0, 1.0, alpha);
+}
+
+[numthreads(8, 8, 1)]
+void Puddle(uint3 id : SV_DispatchThreadID)
+{
+    float2 st = StOf(id.xy);
+    float2 c = st - 0.5;
+    // An organic blob: a radial falloff pushed around by noise, with a soft, damp rim.
+    float3 n = fbm(st, float2(4, 4), 5, 0.5, 91.0 + _Seed * 13.0);
+    float r = length(c * float2(1.0, 1.0 + n.y * 0.1)) + n.x * 0.12;
+    float water = 1.0 - smoothstep(0.26, 0.32, r);
+    float damp = 1.0 - smoothstep(0.3, 0.46, r);
+    if (_Mode == 0)
+    {
+        // Base colour: darken the asphalt under the water (alpha = how much).
+        _Out[id.xy] = float4(0.012, 0.012, 0.014, damp * 0.45 + water * 0.2);
+    }
+    else if (_Mode == 1)
+    {
+        // Mask: smoothness 0.98 in the water, damp around it; B carries the blend opacity.
+        _Out[id.xy] = float4(0.0, 1.0, max(water, damp * 0.6), lerp(0.75, 0.98, water));
+    }
+    else
+    {
+        // Normal: the water surface is flat. Alpha stays 1: HDRP unpacks x from R × A (so the same
+        // shader reads BC5 and DXT5nm maps); the decal's normal opacity comes from the mask's B.
+        _Out[id.xy] = float4(0.5, 0.5, 1.0, 1.0);
+    }
+}

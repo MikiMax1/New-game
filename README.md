@@ -1,6 +1,15 @@
 # Project SOLMAR
 
-An original open-world game in the spirit of GTA VI, set in **Port Solmar**, a fictional Miami-inspired city on the Gulf coast. Built with Three.js and TypeScript, it runs in the browser. The map comes first, realism second, gameplay third. See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md).
+An original open-world game in the spirit of GTA VI, set in **Port Solmar**, a fictional Miami-inspired city on the Gulf coast. The map comes first, realism second, gameplay third. See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md).
+
+## Unity HDRP version (the main direction)
+
+The game is moving to **Unity 6 with HDRP** as a desktop game. The golden-hour street is ported
+first; the rest of the game follows. Everything is still generated in code, with no imported
+models or images. To open it, see [unity/README.md](unity/README.md).
+
+The browser version (Three.js and TypeScript) described below is the prototype. It stays until
+the Unity version covers the same ground.
 
 ## Run it
 

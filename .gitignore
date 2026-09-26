@@ -6,3 +6,6 @@ playwright-report/
 *.log
 .DS_Store
 .claude/worktrees/
+.cache/
+tools/unity-check/bin/
+tools/unity-check/obj/
