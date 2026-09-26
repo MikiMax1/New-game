@@ -148,6 +148,38 @@ namespace Solmar.Rendering
             return m;
         }
 
+        /// <summary>
+        /// An untextured surface for small parts: base colour in linear, smoothness, metallic, and a
+        /// clear coat (0..1, e.g. 1 for car paint). Cached by name and parameters.
+        /// </summary>
+        public Material Surface(string name, Color linear, float smoothness, float metallic = 0f, float coat = 0f)
+        {
+            string key = "surface" + name + linear + smoothness + metallic + coat;
+            if (!cache.TryGetValue(key, out Material m))
+            {
+                m = Flat(name, Linear(linear.r, linear.g, linear.b), smoothness, metallic);
+                if (coat > 0f)
+                {
+                    m.SetFloat("_CoatMask", coat);
+                    HDMaterial.ValidateMaterial(m);
+                }
+                cache.Add(key, m);
+            }
+            return m;
+        }
+
+        /// <summary>Transparent glass with a linear tint, an opacity (alpha) and optional metallic sheen. Cached.</summary>
+        public Material TintedGlass(string name, Color linearTint, float opacity, float metallic = 0f)
+        {
+            string key = "glass" + name + linearTint + opacity + metallic;
+            if (!cache.TryGetValue(key, out Material m))
+            {
+                m = Glass(name, Linear(linearTint.r, linearTint.g, linearTint.b, opacity), metallic);
+                cache.Add(key, m);
+            }
+            return m;
+        }
+
         /// <summary>A colour given in linear, encoded for Material.SetColor.</summary>
         static Color Linear(float r, float g, float b, float a = 1f) => new Color(r, g, b, a).gamma;
 
