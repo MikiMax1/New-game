@@ -38,7 +38,7 @@ namespace Solmar
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AddToScene()
         {
-            if (FindAnyObjectByType<SolmarCity>() == null || FindAnyObjectByType<QualityPresets>() != null) return;
+            if ((FindAnyObjectByType<SolmarCity>() == null && FindAnyObjectByType<City.Roads.SolmarDistrict>() == null) || FindAnyObjectByType<QualityPresets>() != null) return;
             var go = new GameObject("Game settings");
             go.AddComponent<QualityPresets>();
             go.AddComponent<PerformanceOverlay>();
