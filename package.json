@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "shoot": "node tools/shoot.mjs"
+    "shoot": "node tools/shoot.mjs",
+    "capture-screenshot": "node tools/shoot.mjs showcase.html docs/screens/showcase/street.png --size 1600x900 --timeout 900"
   },
   "dependencies": {
     "clipper-lib": "^6.4.2",

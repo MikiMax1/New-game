@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Port Solmar: procedural city</title>
+    <meta name="description" content="Project SOLMAR graphics showcase: a photoreal street generated entirely in code, with no external assets." />
+    <style>
+      html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #000; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div class="loading" id="loading">
+      <div>
+        <div class="title">PORT SOLMAR</div>
+        <div class="sub" id="loading-text">Starting…</div>
+        <div class="bar"><div id="loading-bar"></div></div>
+      </div>
+    </div>
+    <script type="module" src="/src/graphics/main.ts"></script>
+  </body>
+</html>

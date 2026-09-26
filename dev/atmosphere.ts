@@ -2,7 +2,7 @@
 //
 //   dev/atmosphere.html?time=17.5&cam=x,y,z&look=x,y,z
 // Extra parameters: day (1..365), clouds (0..1), haze (multiplier), post=0 (no post-processing),
-// tm=agx|aces|neutral (tone mapping), csm=1 (tint shadow cascades), quality=low|medium|high|ultra.
+// tm=agx|aces|neutral (tone mapping), csm=1 (tint shadow cascades), quality=low|medium|high|ultra|extreme.
 import * as THREE from 'three';
 import '../src/style.css';
 import { Game } from '../src/game';

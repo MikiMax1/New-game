@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Renders pages in headless Chromium (software WebGL) and saves screenshots.
+// Renders pages in headless Chromium (software WebGL / WebGPU via SwiftShader) and saves screenshots.
 //
 //   node tools/shoot.mjs "index.html?cam=0,50,200&look=0,0,0" out.png ["map.html?seed=2" map.png ...]
 //
@@ -36,8 +36,18 @@ if (!base) {
   base = `http://127.0.0.1:${addr.port}`;
 }
 
+// WebGPU needs a secure context: the local server is http://127.0.0.1, which counts as one.
+// Without Vulkan on SwiftShader, presenting WebGPU to a page canvas loses the device.
 const browser = await chromium.launch({
-  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl'],
+  args: [
+    '--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader',
+    '--ignore-gpu-blocklist',
+    '--enable-webgl',
+    '--enable-unsafe-webgpu',
+    '--use-vulkan=swiftshader',
+    '--enable-features=Vulkan',
+  ],
 });
 let failures = 0;
 try {

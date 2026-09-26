@@ -1,0 +1,144 @@
+using System.Collections.Generic;
+using Solmar.Rendering;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace Solmar.City
+{
+    /// <summary>
+    /// Road markings and puddle sites as HDRP mesh decals: thin strips of the decal materials laid
+    /// a centimetre above the asphalt and following its crown (no DecalProjectors, which HDRP's
+    /// decal system could trip over when the street is rebuilt):
+    ///   markings  double yellow centre line, dashed lane lines (3 m dash, 9 m gap), solid parking
+    ///             lane edge lines, a continental crosswalk (0.6 m bars, 0.6 m gaps) and stop lines
+    ///             1.2 m before it; worn paint (the decal texture's alpha)
+    ///   puddles   standing-water sites in the wheel ruts and gutters, where rain actually pools;
+    ///             invisible on the dry street (CityMaterials.PuddleDecal's _DecalBlend starts at 0)
+    ///             and only shown by Solmar.Weather once it has been raining long enough to wet the
+    ///             road, fading them back out as the street dries
+    /// </summary>
+    public static class RoadDecals
+    {
+        public static GameObject Build(Transform parent, CityMaterials m, Rng random)
+        {
+            var root = new GameObject("Road decals");
+            root.transform.SetParent(parent, false);
+            float half = Layout.StreetHalfLength;
+
+            // One mesh per decal material, built up as the decals are laid out.
+            var meshes = new Dictionary<Material, MeshData>();
+
+            // A decal lying on the road: centre (x, z), size along x and z (before `yaw` degrees
+            // of turn), with the texture repeated uvScaleX by uvScaleY times across it. Split
+            // into cells of about a metre so it follows the road's crown and camber.
+            void Decal(string name, Material material, float x, float z, float sx, float sz, float yaw = 0f, float uvScaleX = 1f, float uvScaleY = 1f)
+            {
+                if (!meshes.TryGetValue(material, out MeshData data))
+                {
+                    data = new MeshData();
+                    meshes.Add(material, data);
+                }
+                int nx = Mathf.Clamp(Mathf.CeilToInt(sx), 1, 64);
+                int nz = Mathf.Clamp(Mathf.CeilToInt(sz), 1, 64);
+                Quaternion turn = Quaternion.Euler(0f, yaw, 0f);
+                int first = data.VertexCount;
+                for (int j = 0; j <= nz; j++)
+                {
+                    for (int i = 0; i <= nx; i++)
+                    {
+                        float u = (float)i / nx, v = (float)j / nz;
+                        Vector3 p = new Vector3(x, 0f, z) + turn * new Vector3((u - 0.5f) * sx, 0f, (v - 0.5f) * sz);
+                        p.y = Street.Height(p.x, p.z) + 0.01f;
+                        data.AddVertex(p, Vector3.up, new Vector2(u * uvScaleX, v * uvScaleY));
+                    }
+                }
+                for (int j = 0; j < nz; j++)
+                {
+                    for (int i = 0; i < nx; i++)
+                    {
+                        int a0 = first + j * (nx + 1) + i;
+                        int a1 = a0 + 1, b0 = a0 + nx + 1, b1 = b0 + 1;
+                        data.AddTriangle(a0, b0, b1);
+                        data.AddTriangle(a0, b1, a1);
+                    }
+                }
+            }
+
+            // Long lines in 20 m pieces (the paint texture tiles every metre along them).
+            void Line(string name, Material material, float z, float width, float x0, float x1)
+            {
+                for (float x = x0; x < x1; x += 20f)
+                {
+                    float len = Mathf.Min(20f, x1 - x);
+                    Decal(name, material, x + len / 2f, z, len, width, 0f, len, 1f);
+                }
+            }
+
+            float cw0 = Layout.CrossingX - Layout.CrosswalkWidth / 2f;
+            float cw1 = Layout.CrossingX + Layout.CrosswalkWidth / 2f;
+            foreach (float s in new[] { -1f, 1f })
+            {
+                // Double yellow centre line (two 10 cm lines, 10 cm apart), broken by the crosswalk.
+                Line("Centre line", m.DecalYellow, s * 0.12f, 0.1f, -half, cw0 - 1.2f);
+                Line("Centre line", m.DecalYellow, s * 0.12f, 0.1f, cw1 + 1.2f, half);
+                // Parking lane edge lines.
+                Line("Edge line", m.DecalWhite, s * Layout.ParkingZ, 0.1f, -half, cw0 - 0.5f);
+                Line("Edge line", m.DecalWhite, s * Layout.ParkingZ, 0.1f, cw1 + 0.5f, half);
+                // Dashed lane lines: 3 m of paint every 12 m.
+                for (float x = -half; x < half; x += 12f)
+                {
+                    if (x + 3f > cw0 - 2f && x < cw1 + 2f) continue;
+                    Decal("Lane dash", m.DecalWhite, x + 1.5f, s * Layout.LaneWidth, 3f, 0.1f, 0f, 3f, 1f);
+                }
+            }
+            // Continental crosswalk: bars parallel to the traffic, kerb to kerb.
+            for (float z = -Layout.KerbZ + 0.6f; z < Layout.KerbZ - 0.4f; z += 1.2f)
+            {
+                Decal("Crosswalk bar", m.DecalWhite, Layout.CrossingX, z, Layout.CrosswalkWidth, 0.6f, 0f, 4f, 1f);
+            }
+            // Stop lines 1.2 m before the crosswalk, across the approach lanes (drive on the right).
+            Decal("Stop line", m.DecalWhite, cw0 - 1.425f, Layout.ParkingZ / 2f + 0.1f, 0.45f, Layout.ParkingZ - 0.2f, 0f, 1f, 6f);
+            Decal("Stop line", m.DecalWhite, cw1 + 1.425f, -Layout.ParkingZ / 2f - 0.1f, 0.45f, Layout.ParkingZ - 0.2f, 0f, 1f, 6f);
+
+            // Puddle sites: in the wheel paths (where the ruts are) and along the gutters, where
+            // standing water actually collects. Fewer, larger sites than a fully wet street would
+            // show, since these only appear once Weather says the road is wet.
+            var spots = new List<Vector4>();
+            for (int k = 0; k < 22; k++)
+            {
+                float x = -70f + random.Next() * 110f;
+                if (Mathf.Abs(x - Layout.CrossingX) < 3f) continue;
+                int lane = (int)(random.Next() * 4f) % 4;
+                float laneCentre = (lane < 2 ? -1f : 1f) * ((lane % 2) * Layout.LaneWidth + Layout.LaneWidth / 2f);
+                float z = laneCentre + (random.Next() < 0.5f ? -0.9f : 0.9f);
+                float len = 1.2f + random.Next() * 3.5f;
+                spots.Add(new Vector4(x, z, len, 0.5f + random.Next() * 0.5f));
+            }
+            for (int k = 0; k < 10; k++)
+            {
+                float x = -80f + random.Next() * 150f;
+                float z = (random.Next() < 0.5f ? -1f : 1f) * (Layout.KerbZ - 0.3f);
+                spots.Add(new Vector4(x, z, 1.5f + random.Next() * 5f, 0.45f));
+            }
+            for (int k = 0; k < spots.Count; k++)
+            {
+                Vector4 s = spots[k];
+                Decal("Puddle", m.PuddleDecals[k % m.PuddleDecals.Count], s.x, s.y, s.z, s.w * 1.4f, (random.Next() - 0.5f) * 20f);
+            }
+
+            foreach (KeyValuePair<Material, MeshData> pair in meshes)
+            {
+                var go = new GameObject(pair.Key.name);
+                go.transform.SetParent(root.transform, false);
+                Mesh mesh = pair.Value.ToMesh(pair.Key.name);
+                mesh.hideFlags = HideFlags.DontSave;
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var r = go.AddComponent<MeshRenderer>();
+                r.sharedMaterial = pair.Key;
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                // Not static: CityColliders skips it, so it never becomes a collider.
+            }
+            return root;
+        }
+    }
+}
