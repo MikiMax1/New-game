@@ -17,12 +17,13 @@ next wave fixes what's wrong.
 
 ## Done so far
 
-- Street scene at golden hour; buildings with rooms behind the windows; palms in planted beds.
-- Street lamps, signals, bus shelter, benches, parked cars; night lighting for the street.
-- Sky, volumetric clouds and fog, soft shadows, reflections, synthesised city sound.
-- First road-network generator and a 4 × 4-block district.
-- A third-person player (first cut), a drivable car (first cut).
-- F3 performance overlay, F5 quality presets, F6 fps cap, H help, auto-update.
+- **Wave 1 done (26 Sep):** 2 × 2 km city map (M1), new driving (A1), weather with dry roads (W1),
+  realistic code-built people (P1), 8 car models (V1), traffic (L1).
+- **Wave 2 so far:** pedestrians (L2), player moves and melee (P2), car damage (A3), minimap,
+  full map and GPS (H1, H2), engine, tyre, horn and footstep sound (S1).
+- **Wave 3 so far:** police and wanted level (G1), pause menu, settings and saves (G8).
+- Earlier: street scene, buildings with rooms, lamps, signals, palms in beds, sky, clouds, fog,
+  night lighting on the street, F3/F5/F6/H overlays, auto-update.
 
 ## What Max's playtest found (26 Sep)
 
