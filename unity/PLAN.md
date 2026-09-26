@@ -24,7 +24,7 @@ textures or animations. That means:
 - **Sound and music** are synthesised.
 
 **How I work:** small steps, each one playable. After each step you playtest and send screenshots
-and F3 numbers. Updates reach RealisticGame by themselves (Solmar > Auto Update). I do the work
+and F3 numbers. Updates reach RealisticGame by themselves within two minutes (Solmar > Auto Update; the private repo needs Solmar > Set GitHub Token... once). I do the work
 myself and only use sub-agents for big, separable jobs, to save your usage.
 
 ---

@@ -28,10 +28,16 @@ Scene view straight away.
 ## Keep a copy up to date
 
 If you copy `Assets/Solmar` into another Unity project, it updates itself: when the Editor starts,
-and every ten minutes while it's open, it checks GitHub for new work on this branch, downloads it
+and every two minutes while it's open, it checks GitHub for new work on this branch, downloads it
 and reimports, and the city rebuilds with the new code. Your scene in `Assets/Solmar/Scenes` is
 kept. **Solmar > Auto Update** turns this on or off, and **Solmar > Update Now** checks straight
 away. It's off in the repository's own Git checkout.
+
+The repository is private, so it needs a GitHub token once: on GitHub go to **Settings >
+Developer settings > Fine-grained tokens > Generate new token**, pick the repository
+`MikiMax1/New-game` and give it **Contents: Read-only**. In Unity choose **Solmar > Set GitHub
+Token...**, paste it and press **Save and update**. The token stays in this computer's Unity
+preferences. If checks fail, the Console says why once.
 
 ## Look around
 
