@@ -59,8 +59,10 @@ preferences. If checks fail, the Console says why once.
     cap: none (the default; vsync is off), 60, 120, 144, 165, 240.
   - `H` shows or hides the list of controls (it shows for ten seconds when Play starts).
   - If no keys work, set **Project Settings > Player > Active Input Handling** to **Both**.
-- **The district:** **Solmar > Create District Scene** makes a second scene with a 4 × 4-block
-  grid of streets, an avenue with a planted median, crossings, signals, lamps and buildings.
+- **The city:** **Solmar > Create City Scene** makes the main scene, `Assets/Solmar/Scenes/City.unity`:
+  a 2 × 2 km city with a downtown grid and a diagonal avenue, curving residential streets with
+  houses, Ocean Boulevard with its promenade, beach and ocean, and a ring road. It has traffic,
+  pedestrians and police, and it's first in the build settings.
 - **Screenshots to send:** **Solmar > Capture Spot Screenshots** saves a 1920×1080 PNG of every
   camera spot to `unity/Screenshots/`.
 - **Camera spots:** under *Camera spots* there are *Hero*, *Crossing* and *Puddle*. Select one

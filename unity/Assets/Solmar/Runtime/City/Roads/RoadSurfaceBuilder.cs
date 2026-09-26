@@ -1,74 +1,99 @@
 using System.Collections.Generic;
+using Solmar.Rendering;
 using UnityEngine;
 
 namespace Solmar.City.Roads
 {
     /// <summary>
-    /// Builds the road surface for every edge (crowned carriageways, trimmed where they meet an
-    /// intersection) and a flat plate filling each intersection footprint, all into one mesh so the
-    /// whole district's asphalt costs a single draw call. A street with a median also gets the
-    /// median's raised, planted strip: granite edging and a soil bed (the caller plants palms in it,
-    /// at the positions returned in `medianPalmBases`).
+    /// Builds the road surface for every edge, at whatever angle it runs (crowned carriageways,
+    /// trimmed where they meet a junction), a plate filling each junction fitted to the roads that
+    /// meet there, and the raised, planted medians of the avenues, the boulevard and the ring road:
+    /// granite edging round a soil bed with palms on the avenues and the boulevard, grass on the ring.
+    /// Everything goes into the tile it is in (<see cref="CityTiles"/>), so a tile's asphalt is one
+    /// draw call.
     /// </summary>
     public static class RoadSurfaceBuilder
     {
-        const float WStep = 0.6f;
-        const float SStep = 2.5f;
+        const float WStep = 1.4f;
+        const float SStep = 5f;
+        const float EdgeT = 0.1f;
 
-        public static void Build(RoadGraph graph, MeshData road, MeshData medianEdging, MeshData medianSoil, List<Vector3> medianPalmBases, Rng random)
+        /// <summary>Median palms: positions, and whether they get the detailed model (the boulevard).</summary>
+        public struct PalmSpot
         {
-            foreach (RoadEdge edge in graph.Edges) BuildEdge(graph, edge, road, medianEdging, medianSoil, medianPalmBases, random);
-            for (int i = 0; i < graph.Nodes.Count; i++) BuildPlate(graph, i, road);
+            public Vector3 position;
+            public bool detailed;
         }
 
-        static List<float> Stations(float from, float to, float step)
+        public static void Build(RoadGraph graph, CityTiles tiles, CityMaterials m, Material lawn, List<PalmSpot> palms, Rng random)
         {
-            var list = new List<float>();
-            if (to <= from) { list.Add(from); return list; }
-            float x = from;
-            while (x < to)
+            foreach (RoadEdge edge in graph.Edges) BuildEdge(graph, edge, tiles, m, lawn, palms, random);
+            var pts = new List<Vector2>();
+            var heights = new List<float>();
+            for (int n = 0; n < graph.Nodes.Count; n++)
             {
-                list.Add(x);
-                x += step;
+                RoadJunctions.PlateOutline(graph, n, pts, heights, WStep);
+                if (pts.Count < 3) continue;
+                List<Vector2> outline = DedupeWith(pts, heights);
+                SurfaceMesh.Polygon(tiles.Surface(graph.Nodes[n].Position, "Roads", m.Road), outline, heights);
             }
-            list.Add(to);
-            return list;
         }
 
-        static void BuildEdge(RoadGraph graph, RoadEdge edge, MeshData road, MeshData medianEdging, MeshData medianSoil, List<Vector3> medianPalmBases, Rng random)
+        /// <summary>Drops near-duplicate outline points, keeping `heights` in step (it is edited in place).</summary>
+        static List<Vector2> DedupeWith(List<Vector2> pts, List<float> heights)
         {
-            graph.Span(edge, out float s0, out float s1, out float centre);
-            graph.Ends(edge, out int nodeMin, out int nodeMax);
-            float a = s0 + graph.TrimAt(edge, nodeMin);
-            float b = s1 - graph.TrimAt(edge, nodeMax);
-            if (b <= a + 0.5f) return;
-            var ss = Stations(a, b, SStep);
+            var p = new List<Vector2>();
+            var h = new List<float>();
+            for (int i = 0; i < pts.Count; i++)
+            {
+                if (p.Count > 0 && (p[p.Count - 1] - pts[i]).sqrMagnitude < 0.0004f) continue;
+                p.Add(pts[i]);
+                h.Add(heights[i]);
+            }
+            while (p.Count > 1 && (p[0] - p[p.Count - 1]).sqrMagnitude < 0.0004f)
+            {
+                p.RemoveAt(p.Count - 1);
+                h.RemoveAt(h.Count - 1);
+            }
+            heights.Clear();
+            heights.AddRange(h);
+            return p;
+        }
 
-            float half = edge.HalfWidth;
-            float m = edge.MedianWidth * 0.5f;
+        static void BuildEdge(RoadGraph g, RoadEdge edge, CityTiles tiles, CityMaterials m, Material lawn, List<PalmSpot> palms, Rng random)
+        {
+            float a = edge.TrimA;
+            float b = g.Length(edge) - edge.TrimB;
+            if (b <= a + 0.2f) return;
+            Vector2 mid = g.PointFrom(edge, edge.A, (a + b) * 0.5f, 0f);
+            MeshData road = tiles.Surface(mid, "Roads", m.Road);
+            List<float> ss = SurfaceMesh.Stations(a, b, SStep);
+            List<float> side = RoadProfile.CarriagewayStations(edge, WStep);
             foreach (float sign in new[] { -1f, 1f })
             {
-                float wFrom = sign * m;
-                float wTo = sign * half;
-                var ws = Stations(Mathf.Min(wFrom, wTo), Mathf.Max(wFrom, wTo), WStep);
-                BuildGrid(edge, centre, ss, ws, road);
+                var ws = new List<float>(side.Count);
+                foreach (float w in side) ws.Add(w * sign);
+                Grid(g, edge, ss, ws, a, b, road);
             }
-            if (m > 0.1f) BuildMedian(edge, centre, a, b, m, medianEdging, medianSoil, medianPalmBases, random);
+            float med = edge.MedianWidth * 0.5f;
+            if (med > 0.1f) BuildMedian(g, edge, a, b, med, tiles, m, lawn, palms, random);
         }
 
-        static void BuildGrid(RoadEdge edge, float centre, List<float> ss, List<float> ws, MeshData road)
+        static void Grid(RoadGraph g, RoadEdge edge, List<float> ss, List<float> ws, float a, float b, MeshData road)
         {
             int ns = ss.Count, nw = ws.Count;
             if (ns < 2 || nw < 2) return;
             var idx = new int[ns, nw];
             for (int i = 0; i < ns; i++)
             {
+                // No undulation right at the ends, so the edge meets its plates exactly.
+                float fade = Mathf.Clamp01(Mathf.Min(ss[i] - a, b - ss[i]) / 3f);
                 for (int j = 0; j < nw; j++)
                 {
                     float w = ws[j];
-                    float y = RoadProfile.Height(edge, w, out _) + RoadProfile.Undulation(ss[i], w);
-                    Vector2 xz = RoadGraph.WorldAt(edge, centre, ss[i], w);
-                    idx[i, j] = road.AddVertex(new Vector3(xz.x, y, xz.y), Vector3.up, new Vector2(xz.x, xz.y));
+                    float y = RoadProfile.Height(edge, w, out _) + RoadProfile.Undulation(ss[i], w) * fade;
+                    Vector2 xz = g.PointFrom(edge, edge.A, ss[i], w);
+                    idx[i, j] = road.AddVertex(new Vector3(xz.x, y, xz.y), Vector3.up, xz);
                 }
             }
             int start = road.indices.Count;
@@ -83,94 +108,35 @@ namespace Solmar.City.Roads
             Shapes.FixWinding(road, start, road.indices.Count);
         }
 
-        static void BuildMedian(RoadEdge edge, float centre, float a, float b, float m, MeshData edging, MeshData soil, List<Vector3> palmBases, Rng random)
+        /// <summary>The raised median: granite edging on both sides and across the noses, a soil bed (grass on the ring) and palms.</summary>
+        static void BuildMedian(RoadGraph g, RoadEdge edge, float a, float b, float med, CityTiles tiles, CityMaterials m, Material lawn, List<PalmSpot> palms, Rng random)
         {
-            const float edgeT = 0.08f;
             float top = RoadWidths.KerbHeight;
-            foreach (float sign in new[] { -1f, 1f })
-            {
-                float w = sign * (m - edgeT * 0.5f);
-                edging.Append(Strip(edge, centre, a, b, w, edgeT, top));
-            }
-            edging.Append(Strip(edge, centre, a, a + edgeT, 0f, 2f * m, top));
-            edging.Append(Strip(edge, centre, b - edgeT, b, 0f, 2f * m, top));
-            soil.Append(Strip(edge, centre, a + edgeT, b - edgeT, 0f, 2f * (m - edgeT), top - 0.03f));
+            Vector2 pa = g.PointFrom(edge, edge.A, a, 0f), pb = g.PointFrom(edge, edge.A, b, 0f);
+            Vector2 mid = (pa + pb) * 0.5f;
+            MeshData edging = tiles.Surface(mid, "Median edging", m.Granite);
+            // Along both sides (the box sits inside the median's outline).
+            SurfaceMesh.BoxAlong(edging, pa, pb, med - EdgeT * 0.5f, EdgeT, -0.05f, top);
+            SurfaceMesh.BoxAlong(edging, pa, pb, -(med - EdgeT * 0.5f), EdgeT, -0.05f, top);
+            // Noses.
+            Vector2 d = g.Direction(edge);
+            Vector2 left = RoadGraph.Left(d);
+            SurfaceMesh.BoxAlong(edging, pa + left * med, pa - left * med, -EdgeT * 0.5f, EdgeT, -0.05f, top);
+            SurfaceMesh.BoxAlong(edging, pb - left * med, pb + left * med, -EdgeT * 0.5f, EdgeT, -0.05f, top);
 
-            for (float s = a + 6f; s < b - 4f; s += 15f)
-            {
-                Vector2 xz = RoadGraph.WorldAt(edge, centre, s + random.Range(-2f, 2f), 0f);
-                palmBases.Add(new Vector3(xz.x, top - 0.03f, xz.y));
-            }
-        }
+            bool planted = edge.Class == RoadClass.Avenue || edge.Class == RoadClass.Boulevard;
+            MeshData soil = tiles.Surface(mid, planted ? "Median soil" : "Median grass", planted ? m.Mulch : lawn, CityTiles.Layer.Ground);
+            Vector2 i0 = pa + d * EdgeT + left * (med - EdgeT), i1 = pb - d * EdgeT + left * (med - EdgeT);
+            Vector2 i2 = pb - d * EdgeT - left * (med - EdgeT), i3 = pa + d * EdgeT - left * (med - EdgeT);
+            if (b - a > EdgeT * 3f) SurfaceMesh.GroundQuad(soil, i0, top - 0.03f, i1, top - 0.03f, i2, top - 0.03f, i3, top - 0.03f);
 
-        /// <summary>A flat rectangle along an edge's length, from `s0` to `s1`, centred at `w` across, `width` wide, top at `topY`.</summary>
-        static MeshData Strip(RoadEdge edge, float centre, float s0, float s1, float w, float width, float topY)
-        {
-            var m = new MeshData();
-            if (s1 <= s0 || width <= 0f) return m;
-            Vector2 p0 = RoadGraph.WorldAt(edge, centre, s0, w - width * 0.5f);
-            Vector2 p1 = RoadGraph.WorldAt(edge, centre, s1, w - width * 0.5f);
-            Vector2 p2 = RoadGraph.WorldAt(edge, centre, s1, w + width * 0.5f);
-            Vector2 p3 = RoadGraph.WorldAt(edge, centre, s0, w + width * 0.5f);
-            int i0 = m.AddVertex(new Vector3(p0.x, topY, p0.y), Vector3.up, p0);
-            int i1 = m.AddVertex(new Vector3(p1.x, topY, p1.y), Vector3.up, p1);
-            int i2 = m.AddVertex(new Vector3(p2.x, topY, p2.y), Vector3.up, p2);
-            int i3 = m.AddVertex(new Vector3(p3.x, topY, p3.y), Vector3.up, p3);
-            m.AddTriangle(i0, i1, i2);
-            m.AddTriangle(i0, i2, i3);
-            Shapes.FixWinding(m, 0, m.indices.Count);
-            return m;
-        }
-
-        /// <summary>
-        /// The flat plate filling a node's intersection footprint: its height blends the crown of
-        /// whichever edges cross there, so it meets each one smoothly at the footprint's edge.
-        /// </summary>
-        static void BuildPlate(RoadGraph graph, int nodeIndex, MeshData road)
-        {
-            float ex = graph.HalfExtentX(nodeIndex);
-            float ez = graph.HalfExtentZ(nodeIndex);
-            if (ex < 0.1f || ez < 0.1f) return;
-            Vector2 c = graph.Nodes[nodeIndex].Position;
-            RoadEdge vEdge = Dominant(graph, nodeIndex, RoadOrientation.Vertical);
-            RoadEdge hEdge = Dominant(graph, nodeIndex, RoadOrientation.Horizontal);
-            var xs = Stations(-ex, ex, WStep);
-            var zs = Stations(-ez, ez, WStep);
-            int nx = xs.Count, nz = zs.Count;
-            var idx = new int[nx, nz];
-            for (int i = 0; i < nx; i++)
+            if (!planted) return;
+            float spacing = edge.Class == RoadClass.Boulevard ? 22f : 26f;
+            for (float s = a + 7f; s < b - 5f; s += spacing)
             {
-                for (int j = 0; j < nz; j++)
-                {
-                    float hx = vEdge != null ? RoadProfile.Height(vEdge, xs[i], out _) : RoadWidths.GutterHeight;
-                    float hz = hEdge != null ? RoadProfile.Height(hEdge, zs[j], out _) : RoadWidths.GutterHeight;
-                    float y = (hx + hz) * 0.5f;
-                    var pos = new Vector3(c.x + xs[i], y, c.y + zs[j]);
-                    idx[i, j] = road.AddVertex(pos, Vector3.up, new Vector2(pos.x, pos.z));
-                }
+                Vector2 xz = g.PointFrom(edge, edge.A, s + random.Range(-2f, 2f), 0f);
+                palms.Add(new PalmSpot { position = new Vector3(xz.x, top - 0.03f, xz.y), detailed = edge.Class == RoadClass.Boulevard });
             }
-            int start = road.indices.Count;
-            for (int i = 0; i < nx - 1; i++)
-            {
-                for (int j = 0; j < nz - 1; j++)
-                {
-                    road.AddTriangle(idx[i, j], idx[i + 1, j], idx[i, j + 1]);
-                    road.AddTriangle(idx[i + 1, j], idx[i + 1, j + 1], idx[i, j + 1]);
-                }
-            }
-            Shapes.FixWinding(road, start, road.indices.Count);
-        }
-
-        static RoadEdge Dominant(RoadGraph graph, int nodeIndex, RoadOrientation orientation)
-        {
-            RoadEdge best = null;
-            foreach (int id in graph.Nodes[nodeIndex].EdgeIds)
-            {
-                RoadEdge e = graph.Edges[id];
-                if (e.Orientation != orientation) continue;
-                if (best == null || e.HalfWidth > best.HalfWidth) best = e;
-            }
-            return best;
         }
     }
 }

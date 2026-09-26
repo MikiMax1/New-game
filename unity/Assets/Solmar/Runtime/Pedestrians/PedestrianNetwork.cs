@@ -58,7 +58,6 @@ namespace Solmar.Pedestrians
         float totalWeight;
 
         const float SampleSpacing = 9f;
-        const float CornerMargin = 1.5f;
         const float DeadEndMargin = 2.5f;
         const float MinEdgeUsable = 1f;
         const float MinSidewalkOffset = 0.6f;
@@ -164,8 +163,8 @@ namespace Solmar.Pedestrians
             Vector2 fwd2 = delta / span;
             Vector2 right2 = new Vector2(fwd2.y, -fwd2.x);
 
-            float trimA = TrimAt(graph, edge.A);
-            float trimB = TrimAt(graph, edge.B);
+            float trimA = TrimAt(graph, edge, edge.A);
+            float trimB = TrimAt(graph, edge, edge.B);
             if (trimA + trimB > span - MinEdgeUsable)
             {
                 float scale = Mathf.Max(0f, span - MinEdgeUsable) / Mathf.Max(0.0001f, trimA + trimB);
@@ -257,20 +256,13 @@ namespace Solmar.Pedestrians
             }
         }
 
-        static float TrimAt(RoadGraph graph, int node)
+        static float TrimAt(RoadGraph graph, RoadEdge edge, int node)
         {
             int degree = graph.Nodes[node].EdgeIds.Count;
-            if (degree >= 3) return MaxHalfWidth(graph, node) + CornerMargin;
+            // At a junction, the middle of the painted crosswalk (from the map generator).
+            if (degree >= 3) return graph.TrimAt(edge, node) + RoadWidths.CrosswalkDepth * 0.5f;
             if (degree == 1) return DeadEndMargin;
             return 0f;
-        }
-
-        static float MaxHalfWidth(RoadGraph graph, int node)
-        {
-            float w = 0f;
-            List<int> edgeIds = graph.Nodes[node].EdgeIds;
-            for (int i = 0; i < edgeIds.Count; i++) w = Mathf.Max(w, graph.Edges[edgeIds[i]].HalfWidth);
-            return w;
         }
 
         static float AngleFrom(Vector2 nodePos2D, Vector3 point)

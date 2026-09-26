@@ -44,7 +44,7 @@ namespace Solmar.Traffic
             for (int i = 0; i < graph.Nodes.Count; i++)
             {
                 List<int> edgeIds = graph.Nodes[i].EdgeIds;
-                if (edgeIds.Count < 3) continue;
+                if (!graph.HasSignals(i)) continue; // signal heads stand at 4-way and bigger junctions
                 signals.nodes[i] = signals.BuildNode(graph, i, edgeIds);
             }
             Current = signals;

@@ -33,7 +33,7 @@ namespace Solmar.Weather
         const float FlashDuration = 0.12f;
         const float FlashPeak = 7f;
 
-        const float ClearFreePath = 420f, StormyFreePath = 110f;
+        const float ClearFreePath = 900f, StormyFreePath = 110f;
         const float ClearCloudDensity = 0.22f, StormyCloudDensity = 0.95f;
 
         Light sun;

@@ -6,131 +6,167 @@ using UnityEngine.Rendering;
 namespace Solmar.City.Roads
 {
     /// <summary>
-    /// Street lamps along every block's pavement, staggered on both sides, and signal poles with
-    /// vehicle and pedestrian heads at every four-way intersection, built from FurnitureParts (the
-    /// same models the single street uses).
+    /// Street lamps along every pavement, staggered on the two sides and facing the road whatever
+    /// its angle, and at every junction of four or more streets a signal pole on the kerb corner to
+    /// the right of each approach, its arm reaching over the arriving lanes and its head facing the
+    /// traffic.
+    ///
+    /// Lamps, poles and the bodies of the signal heads are copied into their tile's combined prop
+    /// meshes (thousands of separate objects would cost a draw call each), with a capsule collider
+    /// each; only the lenses of each head are an object of their own, so the lights can change.
     /// </summary>
     public static class RoadFurniture
     {
-        public static GameObject Build(Transform parent, RoadGraph graph, CityMaterials m)
+        /// <summary>A signal head: which junction and which approach (edge) it controls, and its lenses.</summary>
+        public sealed class Signal
         {
-            var root = new GameObject("Road furniture").transform;
-            root.SetParent(parent, false);
-            BuildLamps(root, graph, m);
-            BuildSignals(root, graph, m);
-            return root.gameObject;
+            public int Node;
+            public int Edge;
+            public Transform Head;
+            /// <summary>The lenses: submeshes <see cref="RedSlot"/>, <see cref="AmberSlot"/> and <see cref="GreenSlot"/>.</summary>
+            public MeshRenderer Renderer;
         }
 
-        struct Placement
+        /// <summary>
+        /// Every signal head in the city, for the traffic lights to drive: swap the materials of the
+        /// renderer's red, amber and green slots (<see cref="LitRed"/> and the rest) to show a phase.
+        /// <see cref="SignalLamps"/> does this from the traffic controllers.
+        /// </summary>
+        public static readonly List<Signal> Signals = new List<Signal>();
+
+        /// <summary>Materials for the signal lenses, lit and unlit, made when the city is built.</summary>
+        public static Material LitRed, LitAmber, LitGreen, Unlit;
+
+        /// <summary>Which of a head renderer's material slots are the red, amber and green lenses.</summary>
+        public static int RedSlot, AmberSlot = 1, GreenSlot = 2;
+
+        public static void Build(RoadGraph graph, CityTiles tiles, CityMaterials m)
         {
-            public Vector3 pos;
-            public float yaw;
+            Signals.Clear();
+            BuildLamps(graph, tiles, m);
+            BuildSignals(graph, tiles, m);
         }
 
-        static GameObject Place(Transform parent, string name, Mesh mesh, Material[] mats, IList<Placement> at)
+        static void Capsule(CityTiles tiles, Vector2 at, string name, Vector3 position, float height, float radius)
         {
-            if (at.Count == 0) return null;
-            var group = new GameObject(name);
-            group.transform.SetParent(parent, false);
-            for (int i = 0; i < at.Count; i++)
-            {
-                var go = new GameObject(name + " " + (i + 1));
-                go.transform.SetParent(group.transform, false);
-                go.transform.SetPositionAndRotation(at[i].pos, Quaternion.Euler(0f, at[i].yaw * Mathf.Rad2Deg, 0f));
-                go.AddComponent<MeshFilter>().sharedMesh = mesh;
-                var r = go.AddComponent<MeshRenderer>();
-                r.sharedMaterials = mats;
-                r.shadowCastingMode = ShadowCastingMode.On;
-                go.isStatic = true;
-            }
-            return group;
+            var go = new GameObject(name);
+            go.transform.SetParent(tiles.Props(at), false);
+            go.transform.position = position;
+            var capsule = go.AddComponent<CapsuleCollider>();
+            capsule.center = new Vector3(0f, height * 0.5f, 0f);
+            capsule.height = height;
+            capsule.radius = radius;
         }
 
-        static Material[] MatsFor(Assembly a, Dictionary<string, Material> byName)
+        static void BuildLamps(RoadGraph g, CityTiles tiles, CityMaterials m)
         {
-            var mats = new Material[a.Slots.Count];
-            for (int i = 0; i < mats.Length; i++) mats[i] = byName[a.Slots[i]];
-            return mats;
-        }
-
-        static void BuildLamps(Transform parent, RoadGraph graph, CityMaterials m)
-        {
-            Assembly lampAsm = FurnitureParts.StreetLamp();
-            Mesh mesh = lampAsm.Build("Street lamp");
-            mesh.hideFlags = HideFlags.DontSave;
-            Material[] mats = MatsFor(lampAsm, new Dictionary<string, Material>
+            CityProps lamp = CityProps.StreetLamp();
+            var byslot = new Dictionary<string, Material>
             {
                 { "steel", m.Galvanised },
                 { "housing", m.Painted(new Color(0.55f, 0.57f, 0.57f), 0.35f) },
                 { "lens", m.Painted(new Color(0.3f, 0.3f, 0.28f), 0.1f) },
-            });
+            };
 
-            var at = new List<Placement>();
-            foreach (RoadEdge edge in graph.Edges)
+            foreach (RoadEdge edge in g.Edges)
             {
-                graph.Span(edge, out float s0, out float s1, out float centre);
-                graph.Ends(edge, out int nodeMin, out int nodeMax);
-                float a = s0 + graph.TrimAt(edge, nodeMin);
-                float b = s1 - graph.TrimAt(edge, nodeMax);
-                if (b - a < 8f) continue;
-                foreach (float sign in new[] { -1f, 1f })
+                float len = g.Length(edge);
+                float clear = RoadWidths.CrosswalkDepth + 3f;
+                float a = edge.TrimA + (g.IsJunction(edge.A) ? clear : 2f);
+                float b = len - edge.TrimB - (g.IsJunction(edge.B) ? clear : 2f);
+                if (b - a < 4f) continue;
+                float spacing = edge.Class == RoadClass.Residential ? 44f : 32f;
+                Vector2 d = g.Direction(edge);
+                Vector2 left = RoadGraph.Left(d);
+                foreach (float side in new[] { -1f, 1f })
                 {
-                    float w = sign * (edge.HalfWidth + 0.7f);
-                    float yaw = edge.Orientation == RoadOrientation.Horizontal
-                        ? (sign > 0f ? Mathf.PI : 0f)
-                        : (sign > 0f ? -Mathf.PI / 2f : Mathf.PI / 2f);
-                    float offset = sign > 0f ? 6f : 6f + Layout.LampSpacing * 0.5f;
-                    for (float s = a + offset; s < b - 2f; s += Layout.LampSpacing)
+                    float w = side * (edge.HalfWidth + 0.6f);
+                    // Arms reach over the road.
+                    var facing = new Vector3(-left.x * side, 0f, -left.y * side);
+                    Quaternion rot = Quaternion.LookRotation(facing, Vector3.up);
+                    float offset = side > 0f ? spacing * 0.5f : 0f;
+                    for (float s = a + offset; s <= b; s += spacing)
                     {
-                        Vector2 xz = RoadGraph.WorldAt(edge, centre, s, w);
-                        at.Add(new Placement { pos = new Vector3(xz.x, RoadWidths.KerbHeight, xz.y), yaw = yaw });
+                        Vector2 xz = g.PointFrom(edge, edge.A, s, w);
+                        var p = new Vector3(xz.x, RoadWidths.KerbHeight, xz.y);
+                        lamp.AppendTo(slot => tiles.Surface(xz, "Street lamps", byslot[slot], CityTiles.Layer.Prop), Matrix4x4.TRS(p, rot, Vector3.one));
+                        Capsule(tiles, xz, "Street lamp", p, 8.6f, 0.14f);
                     }
                 }
             }
-            Place(parent, "Street lamps", mesh, mats, at);
         }
 
-        static void BuildSignals(Transform parent, RoadGraph graph, CityMaterials m)
+        static void BuildSignals(RoadGraph g, CityTiles tiles, CityMaterials m)
         {
-            const float reach = 3f;
-            Assembly poleAsm = FurnitureParts.SignalPole(reach);
-            Mesh poleMesh = poleAsm.Build("Signal pole");
-            poleMesh.hideFlags = HideFlags.DontSave;
-            Material[] poleMats = MatsFor(poleAsm, new Dictionary<string, Material> { { "steel", m.Galvanised } });
-
-            Assembly headAsm = FurnitureParts.SignalHead();
-            Mesh headMesh = headAsm.Build("Signal head");
-            headMesh.hideFlags = HideFlags.DontSave;
-            Material[] headMats = MatsFor(headAsm, new Dictionary<string, Material>
+            CityProps body = CityProps.SignalHead();
+            CityProps lensModel = CityProps.SignalLenses();
+            Mesh lensMesh = lensModel.Build("Signal lenses");
+            lensMesh.hideFlags = HideFlags.DontSave;
+            for (int i = 0; i < lensModel.Slots.Count; i++)
+            {
+                if (lensModel.Slots[i] == "red") RedSlot = i;
+                else if (lensModel.Slots[i] == "amber") AmberSlot = i;
+                else if (lensModel.Slots[i] == "green") GreenSlot = i;
+            }
+            LitRed = m.Emissive(new Color(1f, 0.16f, 0.08f), 8000f);
+            LitAmber = m.Emissive(new Color(1f, 0.6f, 0.05f), 8000f);
+            LitGreen = m.Emissive(new Color(0.1f, 1f, 0.55f), 8000f);
+            Unlit = m.Painted(new Color(0.3f, 0.3f, 0.28f), 0.1f);
+            var lensMats = new Material[lensModel.Slots.Count];
+            for (int i = 0; i < lensMats.Length; i++) lensMats[i] = i == RedSlot ? LitRed : Unlit;
+            var bodySlots = new Dictionary<string, Material>
             {
                 { "housing", m.Painted(new Color(0.79f, 0.63f, 0.11f), 0.4f) },
                 { "backplate", m.Painted(new Color(0.105f, 0.11f, 0.115f), 0.45f) },
                 { "border", m.Painted(new Color(0.91f, 0.82f, 0.1f), 0.3f) },
-                { "red", m.Emissive(new Color(1f, 0.16f, 0.08f), 8000f) },
-                { "amber", m.Painted(new Color(0.3f, 0.3f, 0.28f), 0.1f) },
-                { "green", m.Painted(new Color(0.3f, 0.3f, 0.28f), 0.1f) },
-            });
+            };
+            Material steel = m.Galvanised;
+            var poles = new Dictionary<int, CityProps>();
 
-            var poles = new List<Placement>();
-            var heads = new List<Placement>();
-            for (int i = 0; i < graph.Nodes.Count; i++)
+            for (int n = 0; n < g.Nodes.Count; n++)
             {
-                if (graph.Nodes[i].EdgeIds.Count < 4) continue; // a true four-way crossing only
-                float ex = graph.HalfExtentX(i) + 0.6f;
-                float ez = graph.HalfExtentZ(i) + 0.6f;
-                Vector2 c = graph.Nodes[i].Position;
-                float headY = RoadWidths.GutterHeight + 5.2f;
-                foreach (Vector2 corner in new[] { new Vector2(1, 1), new Vector2(-1, 1), new Vector2(1, -1), new Vector2(-1, -1) })
+                if (!g.HasSignals(n)) continue;
+                RoadNode node = g.Nodes[n];
+                int deg = node.Sorted.Count;
+                for (int k = 0; k < deg; k++)
                 {
-                    Vector3 pos = new Vector3(c.x + corner.x * ex, RoadWidths.KerbHeight, c.y + corner.y * ez);
-                    // Face the pole's arm and head back towards the intersection centre.
-                    float yaw = Mathf.Atan2(-corner.x, -corner.y);
-                    poles.Add(new Placement { pos = pos, yaw = yaw });
-                    heads.Add(new Placement { pos = new Vector3(pos.x, headY, pos.z), yaw = yaw });
+                    // Traffic arriving along this edge keeps right, so its kerb is the edge's left
+                    // kerb seen from the node; the pole stands on corner k, which starts there.
+                    RoadEdge e = g.Edges[node.Sorted[k]];
+                    List<Vector2> corner = node.Corners[k];
+                    if (corner.Count == 0) continue;
+                    Vector2 d = g.DirectionFrom(e, n);
+                    Vector2 left = RoadGraph.Left(d);
+                    Vector2 pos = corner[0] + left * 0.9f + d * 0.5f;
+                    float reach = Mathf.Clamp(e.HalfWidth - (e.MedianWidth * 0.5f + e.LanesPerDirection * RoadWidths.LaneWidth * 0.5f) + 0.9f, 2.5f, 8f);
+                    int key = Mathf.RoundToInt(reach * 2f);
+                    if (!poles.TryGetValue(key, out CityProps pole))
+                    {
+                        pole = CityProps.SignalPole(key * 0.5f);
+                        poles.Add(key, pole);
+                    }
+                    // The arm reaches from the kerb over the arriving lanes (towards -left).
+                    var arm = new Vector3(-left.x, 0f, -left.y);
+                    Quaternion rot = Quaternion.LookRotation(arm, Vector3.up);
+                    var p3 = new Vector3(pos.x, RoadWidths.KerbHeight, pos.y);
+                    pole.AppendTo(_ => tiles.Surface(pos, "Signal poles", steel, CityTiles.Layer.Prop), Matrix4x4.TRS(p3, rot, Vector3.one));
+                    Capsule(tiles, pos, "Signal pole", p3, 7f, 0.2f);
+
+                    // The head hangs under the arm's end, lenses facing the arriving traffic (along +d).
+                    Vector3 headPos = p3 + arm * (key * 0.5f - 0.3f) + new Vector3(0f, 5.65f, 0f);
+                    Quaternion headRot = Quaternion.LookRotation(new Vector3(d.x, 0f, d.y), Vector3.up) * Quaternion.Euler(0f, -90f, 0f);
+                    body.AppendTo(slot => tiles.Surface(pos, "Signal heads", bodySlots[slot], CityTiles.Layer.Prop), Matrix4x4.TRS(headPos, headRot, Vector3.one));
+
+                    var go = new GameObject("Signal lenses");
+                    go.transform.SetParent(tiles.Props(pos), false);
+                    go.transform.SetPositionAndRotation(headPos, headRot);
+                    go.AddComponent<MeshFilter>().sharedMesh = lensMesh;
+                    var r = go.AddComponent<MeshRenderer>();
+                    r.sharedMaterials = lensMats;
+                    r.shadowCastingMode = ShadowCastingMode.Off;
+                    Signals.Add(new Signal { Node = n, Edge = node.Sorted[k], Head = go.transform, Renderer = r });
                 }
             }
-            Place(parent, "Signal poles", poleMesh, poleMats, poles);
-            Place(parent, "Signal heads", headMesh, headMats, heads);
         }
     }
 }

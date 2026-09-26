@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Solmar.City.Roads
@@ -43,10 +44,62 @@ namespace Solmar.City.Roads
             return CarriagewayHeight(cw, ownHalf);
         }
 
+        /// <summary>
+        /// Height of the asphalt where an edge meets its junction plate: the crowned profile, and
+        /// across the median (which stops there) the height of the median's gutters, which is the
+        /// same as at a kerb face: <see cref="KerbFaceHeight"/>.
+        /// </summary>
+        public static float EndHeight(RoadEdge edge, float w)
+        {
+            float m = edge.MedianWidth * 0.5f;
+            if (m > 0f && Mathf.Abs(w) < m) return KerbFaceHeight;
+            return Height(edge, w, out _);
+        }
+
+        /// <summary>Height of the asphalt right at a kerb face (the bottom of the gutter).</summary>
+        public const float KerbFaceHeight = 0f;
+
         /// <summary>Small undulation so the asphalt isn't perfectly flat (metres).</summary>
         public static float Undulation(float s, float w)
         {
             return (Mathf.PerlinNoise(s * 0.09f + 12.4f, w * 0.17f + 3.1f) - 0.5f) * 0.01f;
         }
+
+        /// <summary>
+        /// Offsets across one carriageway, from its inner edge (the centreline, or the median's
+        /// side) to its kerb: both gutters sampled closely, the crown every `step` metres.
+        /// </summary>
+        public static List<float> CarriagewayStations(RoadEdge edge, float step)
+        {
+            float m = edge.MedianWidth * 0.5f;
+            float half = edge.HalfWidth;
+            var list = new List<float> { m };
+            if (m > 0f) list.Add(m + GutterWidth);
+            float from = m > 0f ? m + GutterWidth : m;
+            float to = half - GutterWidth;
+            int n = Mathf.Max(1, Mathf.CeilToInt((to - from) / Mathf.Max(0.3f, step)));
+            for (int i = 1; i < n; i++) list.Add(from + (to - from) * i / n);
+            list.Add(to);
+            list.Add(half);
+            return list;
+        }
+    }
+
+    /// <summary>Offsets and heights across a whole edge, shared by the road surface and the junction plates so they meet exactly.</summary>
+    public static class RoadSurfaceStations
+    {
+        /// <summary>Offsets across the whole edge, from the right kerb (-HalfWidth) to the left (+HalfWidth).</summary>
+        public static List<float> Across(RoadEdge edge, float step)
+        {
+            List<float> side = RoadProfile.CarriagewayStations(edge, step);
+            var list = new List<float>();
+            for (int i = side.Count - 1; i >= 0; i--) list.Add(-side[i]);
+            int start = side[0] <= 1e-4f ? 1 : 0;
+            for (int i = start; i < side.Count; i++) list.Add(side[i]);
+            return list;
+        }
+
+        /// <summary>Height of the road where it meets the plate (see <see cref="RoadProfile.EndHeight"/>).</summary>
+        public static float EndHeight(RoadEdge edge, float w) => RoadProfile.EndHeight(edge, w);
     }
 }

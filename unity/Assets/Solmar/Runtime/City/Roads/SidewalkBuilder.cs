@@ -1,160 +1,159 @@
 using System.Collections.Generic;
+using Solmar.Rendering;
 using UnityEngine;
 
 namespace Solmar.City.Roads
 {
     /// <summary>
-    /// The pavement for one block: a flat frame (Layout.PavementWidth wide, matching the single
-    /// street) between the surrounding streets' kerb lines and the building line, a kerb wall
-    /// between the pavement and the road, and kerb ramps cut into the kerb near every corner, where
-    /// a crosswalk lands.
+    /// The pavement round every block, whatever its shape: a flat ring (Layout.PavementWidth or the
+    /// street's own width) between the kerb line, which follows the rounded corners of the
+    /// junctions, and the building line; a granite kerb wall along the whole kerb line; kerb ramps
+    /// down to every crosswalk; and the ground inside the building line: paved courtyards
+    /// downtown and on the beach strip, lawns for yards and parks, paving for plazas.
     /// </summary>
     public static class SidewalkBuilder
     {
-        const float RampRun = 1.4f;
         const float KerbThickness = 0.13f;
+        const float RampRun = 1.0f;
 
-        /// <summary>The block's outer (kerb line) and inner (building line) rectangles.</summary>
-        public struct BlockRect
+        public static void Build(CityPlan plan, CityTiles tiles, CityMaterials m, Material lawn)
         {
-            public float x0, x1, z0, z1;
-            public float bx0, bx1, bz0, bz1;
-
-            public bool Valid => x1 > x0 + 0.5f && z1 > z0 + 0.5f && bx1 > bx0 + 0.5f && bz1 > bz0 + 0.5f;
+            foreach (CityBlock b in plan.Blocks) BuildBlock(plan.Graph, b, tiles, m, lawn);
+            if (plan.Outside != null) BuildBlock(plan.Graph, plan.Outside, tiles, m, lawn);
         }
 
-        /// <summary>The four nodes are the block's corners: bottom-left, bottom-right, top-left, top-right.</summary>
-        public static BlockRect Compute(RoadGraph graph, int nBL, int nBR, int nTL, int nTR, float sidewalk)
+        static void BuildBlock(RoadGraph g, CityBlock b, CityTiles tiles, CityMaterials m, Material lawn)
         {
-            var r = new BlockRect
-            {
-                x0 = Mathf.Max(graph.Nodes[nBL].Position.x + graph.HalfExtentX(nBL), graph.Nodes[nTL].Position.x + graph.HalfExtentX(nTL)),
-                x1 = Mathf.Min(graph.Nodes[nBR].Position.x - graph.HalfExtentX(nBR), graph.Nodes[nTR].Position.x - graph.HalfExtentX(nTR)),
-                z0 = Mathf.Max(graph.Nodes[nBL].Position.y + graph.HalfExtentZ(nBL), graph.Nodes[nBR].Position.y + graph.HalfExtentZ(nBR)),
-                z1 = Mathf.Min(graph.Nodes[nTL].Position.y - graph.HalfExtentZ(nTL), graph.Nodes[nTR].Position.y - graph.HalfExtentZ(nTR)),
-            };
-            r.bx0 = r.x0 + sidewalk;
-            r.bx1 = r.x1 - sidewalk;
-            r.bz0 = r.z0 + sidewalk;
-            r.bz1 = r.z1 - sidewalk;
-            return r;
-        }
-
-        public static void Build(BlockRect r, MeshData pavement, MeshData kerb, MeshData ramps)
-        {
-            if (!r.Valid) return;
-            Quad(pavement, r.x0, r.x1, r.z0, r.bz0);
-            Quad(pavement, r.x0, r.x1, r.bz1, r.z1);
-            Quad(pavement, r.x0, r.bx0, r.bz0, r.bz1);
-            Quad(pavement, r.bx1, r.x1, r.bz0, r.bz1);
-
-            KerbLineX(kerb, ramps, r.z0, r.x0, r.x1, -1f);
-            KerbLineX(kerb, ramps, r.z1, r.x0, r.x1, 1f);
-            KerbLineZ(kerb, ramps, r.x0, r.z0, r.z1, -1f);
-            KerbLineZ(kerb, ramps, r.x1, r.z0, r.z1, 1f);
-        }
-
-        static void Quad(MeshData m, float x0, float x1, float z0, float z1)
-        {
-            if (x1 <= x0 || z1 <= z0) return;
+            int count = b.Nodes.Count;
+            if (count < 2 || b.Kerb.Count < 3) return;
+            List<Vector2> kerb = b.Kerb;
             const float y = RoadWidths.KerbHeight;
-            int i0 = m.AddVertex(new Vector3(x0, y, z0), Vector3.up, new Vector2(x0, z0));
-            int i1 = m.AddVertex(new Vector3(x1, y, z0), Vector3.up, new Vector2(x1, z0));
-            int i2 = m.AddVertex(new Vector3(x1, y, z1), Vector3.up, new Vector2(x1, z1));
-            int i3 = m.AddVertex(new Vector3(x0, y, z1), Vector3.up, new Vector2(x0, z1));
-            int start = m.indices.Count;
-            m.AddTriangle(i0, i1, i2);
-            m.AddTriangle(i0, i2, i3);
-            Shapes.FixWinding(m, start, m.indices.Count);
-        }
 
-        /// <summary>Kerb wall (with ramp gaps) along a line of constant z, spanning x0..x1. `outward` is -1 (road to the south) or +1 (road to the north).</summary>
-        static void KerbLineX(MeshData kerb, MeshData ramps, float z, float x0, float x1, float outward)
-        {
-            float length = x1 - x0;
-            if (length <= 0.1f) return;
-            List<float> cuts = RampCuts(length);
-            for (int k = 0; k < cuts.Count - 1; k++)
+            // Kerb walls and ramps.
+            for (int i = 0; i < count; i++)
             {
-                float s0 = cuts[k], s1 = cuts[k + 1];
-                if (s1 - s0 < 1e-3f) continue;
-                float xa = x0 + s0, xb = x0 + s1;
-                float mid = (s0 + s1) * 0.5f;
-                if (IsRamp(mid, length))
+                Vector2 at = g.Nodes[b.Nodes[i]].Position;
+                MeshData walls = tiles.Surface(at, "Kerbs", m.Kerb);
+                for (int j = b.KerbCornerStart[i]; j < b.KerbCornerEnd[i]; j++) Wall(walls, kerb[j], kerb[j + 1]);
+
+                // The straight kerb along Edges[i], with a ramp at each end that meets a crosswalk.
+                Vector2 p = kerb[b.KerbCornerEnd[i]];
+                Vector2 q = kerb[b.KerbCornerStart[(i + 1) % count]];
+                float len = Vector2.Distance(p, q);
+                if (len < 0.05f) continue;
+                Vector2 dir = (q - p) / len;
+                bool rampStart = g.IsJunction(b.Nodes[i]);
+                bool rampEnd = g.IsJunction(b.Nodes[(i + 1) % count]);
+                float ramp = Mathf.Min(RoadWidths.CrosswalkDepth, len * 0.4f);
+                float s0 = rampStart ? ramp : 0f;
+                float s1 = rampEnd ? len - ramp : len;
+                MeshData ramps = tiles.Surface(at, "Kerb ramps", m.Pavement);
+                if (rampStart && ramp > 0.3f) Ramp(ramps, p, p + dir * ramp);
+                if (rampEnd && ramp > 0.3f) Ramp(ramps, q - dir * ramp, q);
+                if (s1 > s0 + 0.02f) Wall(walls, p + dir * s0, p + dir * s1);
+            }
+
+            // The pavement ring.
+            if (b.PavementValid)
+            {
+                List<Vector2> line = b.BuildingLine;
+                for (int i = 0; i < count; i++)
                 {
-                    Vector3 in0 = new Vector3(xa, RoadWidths.KerbHeight, z);
-                    Vector3 in1 = new Vector3(xb, RoadWidths.KerbHeight, z);
-                    RampQuad(ramps, in0, in1, new Vector2(0f, outward));
+                    Vector2 qi = line[i];
+                    MeshData pave = tiles.Surface(g.Nodes[b.Nodes[i]].Position, "Pavements", m.Pavement);
+                    for (int j = b.KerbCornerStart[i]; j < b.KerbCornerEnd[i]; j++) SurfaceMesh.Triangle(pave, qi, kerb[j], kerb[j + 1], y);
+                    int next = (i + 1) % count;
+                    Vector2 c0 = kerb[b.KerbCornerEnd[i]], c1 = kerb[b.KerbCornerStart[next]];
+                    SurfaceMesh.Triangle(pave, c0, c1, line[next], y);
+                    SurfaceMesh.Triangle(pave, c0, line[next], qi, y);
                 }
-                else
-                {
-                    kerb.Append(Shapes.ChamferBox(xb - xa, RoadWidths.KerbHeight - RoadWidths.GutterHeight, KerbThickness, 0.015f)
-                        .Translate((xa + xb) * 0.5f, (RoadWidths.KerbHeight + RoadWidths.GutterHeight) * 0.5f, z + outward * KerbThickness * 0.5f));
-                }
+                if (b.Kind != BlockKind.Outside) Ground(b, tiles, m, lawn);
+            }
+            else if (b.Kind != BlockKind.Outside)
+            {
+                SurfaceMesh.Polygon(tiles.Surface(b.Centre, "Pavements", m.Pavement), Polygons.Dedupe(kerb), y);
             }
         }
 
-        /// <summary>Kerb wall (with ramp gaps) along a line of constant x, spanning z0..z1. `outward` is -1 (road to the west) or +1 (road to the east).</summary>
-        static void KerbLineZ(MeshData kerb, MeshData ramps, float x, float z0, float z1, float outward)
+        /// <summary>The ground inside the building line.</summary>
+        static void Ground(CityBlock b, CityTiles tiles, CityMaterials m, Material lawn)
         {
-            float length = z1 - z0;
-            if (length <= 0.1f) return;
-            List<float> cuts = RampCuts(length);
-            for (int k = 0; k < cuts.Count - 1; k++)
+            string name;
+            Material mat;
+            switch (b.Kind)
             {
-                float s0 = cuts[k], s1 = cuts[k + 1];
-                if (s1 - s0 < 1e-3f) continue;
-                float za = z0 + s0, zb = z0 + s1;
-                float mid = (s0 + s1) * 0.5f;
-                if (IsRamp(mid, length))
-                {
-                    Vector3 in0 = new Vector3(x, RoadWidths.KerbHeight, za);
-                    Vector3 in1 = new Vector3(x, RoadWidths.KerbHeight, zb);
-                    RampQuad(ramps, in0, in1, new Vector2(outward, 0f));
-                }
-                else
-                {
-                    kerb.Append(Shapes.ChamferBox(KerbThickness, RoadWidths.KerbHeight - RoadWidths.GutterHeight, zb - za, 0.015f)
-                        .Translate(x + outward * KerbThickness * 0.5f, (RoadWidths.KerbHeight + RoadWidths.GutterHeight) * 0.5f, (za + zb) * 0.5f));
-                }
+                case BlockKind.Park:
+                    name = "Park lawn";
+                    mat = lawn;
+                    break;
+                case BlockKind.Plaza:
+                    name = "Plaza paving";
+                    mat = m.Pavement;
+                    break;
+                default:
+                    bool yard = b.District == District.Residential;
+                    name = yard ? "Yards" : "Courtyards";
+                    mat = yard ? lawn : m.Concrete;
+                    break;
             }
+            SurfaceMesh.Polygon(tiles.Surface(b.Centre, name, mat, CityTiles.Layer.Ground), b.BuildingLine, RoadWidths.KerbHeight);
         }
 
-        static List<float> RampCuts(float length)
+        /// <summary>A kerb wall along p→q, standing on the road side (the right, looking from p to q) of the kerb line.</summary>
+        static void Wall(MeshData m, Vector2 p, Vector2 q)
         {
-            float rw = Mathf.Min(RoadWidths.RampWidth, length * 0.3f);
-            var cuts = new List<float> { 0f, length };
-            if (length > rw * 3f)
+            Vector2 d = q - p;
+            float len = d.magnitude;
+            if (len < 0.01f) return;
+            d /= len;
+            // Only the faces that can be seen: the top, a chamfer and the face to the road (the
+            // pavement covers the back). Stretched a little at each end so bends close up.
+            p -= d * 0.02f;
+            q += d * 0.02f;
+            len += 0.04f;
+            var right = new Vector2(d.y, -d.x);
+            const float top = RoadWidths.KerbHeight, chamfer = 0.02f, bottom = -0.06f;
+            Vector3 P(Vector2 at, float across, float y)
             {
-                cuts.Add(rw);
-                cuts.Add(length - rw);
-                cuts.Sort();
+                Vector2 v = at + right * across;
+                return new Vector3(v.x, y, v.y);
             }
-            return cuts;
+            var up = Vector3.up;
+            var face = new Vector3(right.x, 0f, right.y);
+            Vector3 bevel = (up + face).normalized;
+            const float inner = KerbThickness - chamfer;
+            SurfaceMesh.Quad(m, P(p, 0f, top), P(q, 0f, top), P(q, inner, top), P(p, inner, top), up,
+                new Vector2(0f, 0f), new Vector2(len, 0f), new Vector2(len, inner), new Vector2(0f, inner));
+            SurfaceMesh.Quad(m, P(p, inner, top), P(q, inner, top), P(q, KerbThickness, top - chamfer), P(p, KerbThickness, top - chamfer), bevel,
+                new Vector2(0f, inner), new Vector2(len, inner), new Vector2(len, KerbThickness + 0.01f), new Vector2(0f, KerbThickness + 0.01f));
+            SurfaceMesh.Quad(m, P(p, KerbThickness, top - chamfer), P(q, KerbThickness, top - chamfer), P(q, KerbThickness, bottom), P(p, KerbThickness, bottom), face,
+                new Vector2(0f, top), new Vector2(len, top), new Vector2(len, bottom), new Vector2(0f, bottom));
         }
 
-        static bool IsRamp(float mid, float length)
+        /// <summary>A kerb ramp: the pavement edge from p to q sloping down onto the road (to the right) over RampRun.</summary>
+        static void Ramp(MeshData m, Vector2 p, Vector2 q)
         {
-            float rw = Mathf.Min(RoadWidths.RampWidth, length * 0.3f);
-            return mid < rw || mid > length - rw;
-        }
-
-        /// <summary>A sloped ramp quad from the pavement (in0, in1, at kerb height) down to the road, `outward` beyond it.</summary>
-        static void RampQuad(MeshData m, Vector3 in0, Vector3 in1, Vector2 outward)
-        {
-            Vector3 offset = new Vector3(outward.x, 0f, outward.y) * RampRun;
-            Vector3 out0 = new Vector3(in0.x + offset.x, RoadWidths.GutterHeight, in0.z + offset.z);
-            Vector3 out1 = new Vector3(in1.x + offset.x, RoadWidths.GutterHeight, in1.z + offset.z);
-            Vector3 n = Vector3.Cross(in1 - in0, out0 - in0).normalized;
+            Vector2 d = RoadGraph.SafeNormal(q - p);
+            Vector2 right = new Vector2(d.y, -d.x);
+            Vector2 po = p + right * RampRun, qo = q + right * RampRun;
+            var a = new Vector3(p.x, RoadWidths.KerbHeight, p.y);
+            var b = new Vector3(q.x, RoadWidths.KerbHeight, q.y);
+            var c = new Vector3(qo.x, RoadWidths.GutterHeight * 0.5f, qo.y);
+            var e = new Vector3(po.x, RoadWidths.GutterHeight * 0.5f, po.y);
+            Vector3 n = Vector3.Cross(b - a, e - a).normalized;
             if (n.y < 0f) n = -n;
-            int i0 = m.AddVertex(in0, n, new Vector2(in0.x, in0.z));
-            int i1 = m.AddVertex(in1, n, new Vector2(in1.x, in1.z));
-            int i2 = m.AddVertex(out1, n, new Vector2(out1.x, out1.z));
-            int i3 = m.AddVertex(out0, n, new Vector2(out0.x, out0.z));
-            int start = m.indices.Count;
+            SurfaceMesh.Quad(m, a, b, c, e, n, p, q, qo, po);
+            // Cheeks closing the ramp's sides down to the road.
+            var pb = new Vector3(p.x, -0.02f, p.y);
+            var qb = new Vector3(q.x, -0.02f, q.y);
+            int first = m.indices.Count;
+            Vector3 side = new Vector3(-d.x, 0f, -d.y);
+            int i0 = m.AddVertex(a, side, new Vector2(0f, a.y)), i1 = m.AddVertex(e, side, new Vector2(RampRun, e.y)), i2 = m.AddVertex(pb, side, new Vector2(0f, pb.y));
             m.AddTriangle(i0, i1, i2);
-            m.AddTriangle(i0, i2, i3);
-            Shapes.FixWinding(m, start, m.indices.Count);
+            side = -side;
+            int j0 = m.AddVertex(b, side, new Vector2(0f, b.y)), j1 = m.AddVertex(c, side, new Vector2(RampRun, c.y)), j2 = m.AddVertex(qb, side, new Vector2(0f, qb.y));
+            m.AddTriangle(j0, j1, j2);
+            Shapes.FixWinding(m, first, m.indices.Count);
         }
     }
 }

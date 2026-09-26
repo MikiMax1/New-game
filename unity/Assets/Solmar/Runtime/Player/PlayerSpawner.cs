@@ -15,9 +15,6 @@ namespace Solmar
         const int PlayerLayer = 31;
         const float SpawnX = 10f;
         const float SpawnZ = -11f;
-        /// <summary>In the district: the pavement beside the avenue, halfway along its second block.</summary>
-        const float DistrictSpawnX = City.Roads.DistrictGenerator.AvenueColumn * City.Roads.DistrictGenerator.BlockLengthX + 12.5f;
-        const float DistrictSpawnZ = City.Roads.DistrictGenerator.BlockLengthZ * 1.5f;
 
         GameObject playerRoot;
         PlayerCharacter character;
@@ -72,9 +69,11 @@ namespace Solmar
         /// colliders (<see cref="CityColliders"/>) haven't been added yet.</summary>
         static Vector3 SpawnPosition()
         {
-            bool district = FindAnyObjectByType<SolmarCity>() == null;
-            float x = district ? DistrictSpawnX : SpawnX;
-            float z = district ? DistrictSpawnZ : SpawnZ;
+            // In the city: the pavement the city chose (City.Roads.SolmarDistrict.PlayerSpawn).
+            bool district = FindAnyObjectByType<SolmarCity>() == null && FindAnyObjectByType<City.Roads.SolmarDistrict>() != null;
+            Vector3 districtSpawn = City.Roads.SolmarDistrict.PlayerSpawn.position;
+            float x = district ? districtSpawn.x : SpawnX;
+            float z = district ? districtSpawn.z : SpawnZ;
             var from = new Vector3(x, 50f, z);
             if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, 200f, ~(1 << PlayerLayer), QueryTriggerInteraction.Ignore))
             {

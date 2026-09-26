@@ -1,110 +1,96 @@
 using System.Collections.Generic;
 using Solmar.Rendering;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace Solmar.City.Roads
 {
     /// <summary>
-    /// Builds a downtown grid district from a seed: a 4 x 4 grid of blocks (about 100 x 80 m each),
-    /// with one wider avenue (two lanes each way and a planted median) running through it, every
-    /// road and intersection surface, kerb, sidewalk, kerb ramp, lane marking, street lamp and
-    /// signal, and buildings filling every block.
+    /// Builds the whole city of Solmar from a seed, about 2 × 2 km inside its ring road: a
+    /// downtown grid of towers crossed by a diagonal avenue, Art Deco and MiMo blocks along a
+    /// coastal boulevard with a promenade and beach, residential neighbourhoods of curving streets
+    /// and houses with yards, parks and plazas, and land, beach and ocean out to the horizon.
+    ///
+    /// <see cref="CityPlan"/> lays it out (streets, junctions, blocks, lots, buildings) without
+    /// touching Unity; the builders here turn the plan into meshes, collected per 200 m tile and
+    /// material by <see cref="CityTiles"/>. The plan and its road graph are published as
+    /// <see cref="CityPlan.Current"/> and <see cref="RoadGraph.Current"/> for traffic, pedestrians
+    /// and the minimap.
     /// </summary>
     public static class DistrictGenerator
     {
-        /// <summary>Nodes across (one more than the number of blocks across).</summary>
+        // The old 4 × 4 grid's dimensions, kept for code that still reads them; the city no longer uses them.
+        /// <summary>Nodes across the old grid.</summary>
         public const int Columns = 5;
-        /// <summary>Nodes deep (one more than the number of blocks deep).</summary>
+        /// <summary>Nodes deep in the old grid.</summary>
         public const int Rows = 5;
         public const float BlockLengthX = 100f;
         public const float BlockLengthZ = 80f;
-        /// <summary>Which column of vertical streets is the avenue.</summary>
+        /// <summary>Which column of the old grid was the avenue.</summary>
         public const int AvenueColumn = 2;
 
-        public static GameObject Build(Transform parent, CityMaterials m, Rng random)
+        /// <summary>Plans and builds the city under `parent`; returns the plan.</summary>
+        public static CityPlan Build(Transform parent, CityMaterials m, uint seed, Rng random)
         {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            CityPlan plan = CityPlan.Build(seed);
+            CityPlan.Current = plan;
+            RoadGraph.Current = plan.Graph;
+            var stages = new System.Text.StringBuilder("plan " + watch.ElapsedMilliseconds + " ms");
+            long last = watch.ElapsedMilliseconds;
+            void Lap(string stage)
+            {
+                long now = watch.ElapsedMilliseconds;
+                stages.Append(", " + stage + " " + (now - last) + " ms");
+                last = now;
+            }
+
             var root = new GameObject("District").transform;
             root.SetParent(parent, false);
+            root.gameObject.isStatic = true;
+            var tiles = new CityTiles(root);
 
-            RoadGraph graph = BuildGraph(out int[,] nodeAt);
-            RoadGraph.Current = graph;
+            Material lawn = m.Surface("Lawn", new Color(0.075f, 0.13f, 0.04f), 0.12f);
+            Material water = m.Surface("Pool water", new Color(0.03f, 0.2f, 0.24f), 0.95f);
+            Material ocean = m.Surface("Ocean", new Color(0.012f, 0.055f, 0.07f), 0.94f);
+            Material canopy = m.Surface("Tree leaves", new Color(0.055f, 0.11f, 0.035f), 0.25f);
 
-            var road = new MeshData();
-            var medianEdging = new MeshData();
-            var medianSoil = new MeshData();
-            var medianPalmBases = new List<Vector3>();
-            RoadSurfaceBuilder.Build(graph, road, medianEdging, medianSoil, medianPalmBases, random);
-            AddSurface(root, "Roads", road, m.Road);
-            AddSurface(root, "Median edging", medianEdging, m.Granite);
-            AddSurface(root, "Median soil", medianSoil, m.Mulch);
-            Palms.Build(root, medianPalmBases, m, random, false);
+            var medianPalms = new List<RoadSurfaceBuilder.PalmSpot>();
+            RoadSurfaceBuilder.Build(plan.Graph, tiles, m, lawn, medianPalms, random);
+            Lap("roads");
+            SidewalkBuilder.Build(plan, tiles, m, lawn);
+            Lap("pavements");
+            RoadMarkings.Build(plan.Graph, tiles, m);
+            Lap("markings");
+            RoadFurniture.Build(plan.Graph, tiles, m);
+            Lap("lamps and signals");
+            DistrictBlocks.Build(plan, tiles, m, lawn, water, random);
+            Lap("buildings");
 
-            var pavement = new MeshData();
-            var kerb = new MeshData();
-            var ramps = new MeshData();
-            var blocks = new List<SidewalkBuilder.BlockRect>();
-            for (int i = 0; i < Columns - 1; i++)
-            {
-                for (int j = 0; j < Rows - 1; j++)
-                {
-                    SidewalkBuilder.BlockRect rect = SidewalkBuilder.Compute(graph, nodeAt[i, j], nodeAt[i + 1, j], nodeAt[i, j + 1], nodeAt[i + 1, j + 1], RoadWidths.DefaultSidewalk);
-                    SidewalkBuilder.Build(rect, pavement, kerb, ramps);
-                    blocks.Add(rect);
-                }
-            }
-            AddSurface(root, "Pavements", pavement, m.Pavement);
-            AddSurface(root, "Kerbs", kerb, m.Kerb);
-            AddSurface(root, "Kerb ramps", ramps, m.Pavement);
+            var detailed = new List<Vector3>();
+            var palms = new List<Vector3>();
+            var trees = new List<Vector3>();
+            foreach (RoadSurfaceBuilder.PalmSpot spot in medianPalms) (spot.detailed ? detailed : palms).Add(spot.position);
+            foreach (CityBlock block in plan.Blocks) AddPlanted(block, palms, trees);
+            if (plan.Outside != null) AddPlanted(plan.Outside, palms, trees);
 
-            RoadMarkings.Build(root, graph, m);
-            RoadFurniture.Build(root, graph, m);
-            DistrictBlocks.Build(root, blocks, m, random);
+            CityGround.Build(plan, root, tiles, m, lawn, ocean, palms, trees, random);
+            Lap("ground");
+            CityTrees.Build(tiles, m, canopy, detailed, palms, trees, random);
+            Lap("trees");
+            tiles.Build();
+            Lap("meshes");
 
-            return root.gameObject;
+            Debug.Log("Solmar city: " + plan.Graph.Nodes.Count + " junctions and bends, " + plan.Graph.Edges.Count + " street segments, "
+                + plan.Blocks.Count + " blocks, " + plan.Buildings.Count + " buildings, " + (detailed.Count + palms.Count) + " palms (" + detailed.Count + " detailed) and " + trees.Count
+                + " trees in " + watch.ElapsedMilliseconds + " ms (" + stages + ").");
+            return plan;
         }
 
-        static RoadGraph BuildGraph(out int[,] nodeAt)
+        /// <summary>The palms and trees a block's planner placed (on the ground inside its building line, at kerb height).</summary>
+        static void AddPlanted(CityBlock block, List<Vector3> palms, List<Vector3> trees)
         {
-            var graph = new RoadGraph();
-            nodeAt = new int[Columns, Rows];
-            for (int i = 0; i < Columns; i++)
-            {
-                for (int j = 0; j < Rows; j++)
-                {
-                    nodeAt[i, j] = graph.AddNode(new Vector2(i * BlockLengthX, j * BlockLengthZ));
-                }
-            }
-            for (int i = 0; i < Columns; i++)
-            {
-                bool avenue = i == AvenueColumn;
-                for (int j = 0; j < Rows - 1; j++)
-                {
-                    graph.AddEdge(nodeAt[i, j], nodeAt[i, j + 1], RoadOrientation.Vertical, avenue ? 2 : 1, true, avenue ? 4f : 0f);
-                }
-            }
-            for (int j = 0; j < Rows; j++)
-            {
-                for (int i = 0; i < Columns - 1; i++)
-                {
-                    graph.AddEdge(nodeAt[i, j], nodeAt[i + 1, j], RoadOrientation.Horizontal, 1, true, 0f);
-                }
-            }
-            return graph;
-        }
-
-        static void AddSurface(Transform parent, string name, MeshData data, Material material)
-        {
-            if (data.VertexCount == 0) return;
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            Mesh mesh = data.ToMesh(name);
-            mesh.hideFlags = HideFlags.DontSave;
-            go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            var r = go.AddComponent<MeshRenderer>();
-            r.sharedMaterial = material;
-            r.shadowCastingMode = ShadowCastingMode.On;
-            go.isStatic = true;
+            foreach (Vector2 p in block.Palms) palms.Add(new Vector3(p.x, RoadWidths.KerbHeight, p.y));
+            foreach (Vector2 p in block.Trees) trees.Add(new Vector3(p.x, RoadWidths.KerbHeight, p.y));
         }
     }
 }

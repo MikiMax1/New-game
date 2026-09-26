@@ -24,7 +24,6 @@ namespace Solmar.Traffic
         /// <summary>Node index -> lanes that start there (used to link turns and to pick a spawn lane).</summary>
         readonly Dictionary<int, List<TrafficLane>> outgoingByNode = new Dictionary<int, List<TrafficLane>>();
 
-        const float StopLineMargin = 2f;
         const float DeadEndMargin = 3.5f;
         const float MinLaneLength = 1f;
         const int TurnSamples = 8;
@@ -59,8 +58,8 @@ namespace Solmar.Traffic
             Vector2 fwd2 = delta / span;
             Vector2 right2 = new Vector2(fwd2.y, -fwd2.x);
 
-            float trimFrom = TrimAt(graph, fromNode, span);
-            float trimTo = TrimAt(graph, toNode, span);
+            float trimFrom = TrimAt(graph, edge, fromNode, span);
+            float trimTo = TrimAt(graph, edge, toNode, span);
             if (trimFrom + trimTo > span - MinLaneLength)
             {
                 float scale = Mathf.Max(0f, span - MinLaneLength) / Mathf.Max(0.0001f, trimFrom + trimTo);
@@ -108,20 +107,13 @@ namespace Solmar.Traffic
 
         /// <summary>How far a lane trims back from `node`: a stop line at a real junction, a short
         /// buffer at a dead end, or nothing at a simple pass-through (a curve's interior node).</summary>
-        static float TrimAt(RoadGraph graph, int node, float edgeSpan)
+        static float TrimAt(RoadGraph graph, RoadEdge edge, int node, float edgeSpan)
         {
             int degree = graph.Nodes[node].EdgeIds.Count;
-            if (degree >= 3) return MaxHalfWidth(graph, node) + StopLineMargin;
+            // At a junction, the painted stop line behind the crosswalk (from the map generator).
+            if (degree >= 3) return graph.StopLineAt(edge, node);
             if (degree == 1) return Mathf.Min(DeadEndMargin, edgeSpan * 0.4f);
             return 0f;
-        }
-
-        static float MaxHalfWidth(RoadGraph graph, int node)
-        {
-            float w = 0f;
-            List<int> edgeIds = graph.Nodes[node].EdgeIds;
-            for (int i = 0; i < edgeIds.Count; i++) w = Mathf.Max(w, graph.Edges[edgeIds[i]].HalfWidth);
-            return w;
         }
 
         static Vector3 To3D(Vector2 xz)

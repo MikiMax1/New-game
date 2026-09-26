@@ -14,8 +14,6 @@ namespace Solmar.Vehicles
     {
         /// <summary>Where the car is parked: x along the street, z the lane (southbound lanes are z &lt; 0).</summary>
         static readonly Vector3 SpawnXz = new Vector3(40f, 0f, -1.65f);
-        /// <summary>In the district: the avenue's outer northbound lane, a few metres short of the player.</summary>
-        static readonly Vector3 DistrictSpawnXz = new Vector3(City.Roads.DistrictGenerator.AvenueColumn * City.Roads.DistrictGenerator.BlockLengthX + 6.95f, 0f, City.Roads.DistrictGenerator.BlockLengthZ * 1.5f - 9f);
         /// <summary>How close the walking player has to be to the car to get in.</summary>
         const float EnterDistance = 6f;
 
@@ -42,7 +40,9 @@ namespace Solmar.Vehicles
 
             var go = new GameObject("Vehicle spawner");
             var spawner = go.AddComponent<VehicleSpawner>();
-            spawner.car = city != null ? SpawnCar(SpawnXz.x, SpawnXz.z, Vector3.left) : SpawnCar(DistrictSpawnXz.x, DistrictSpawnXz.z, Vector3.forward);
+            // In the city: parked at the kerb beside the player, facing with the traffic (City.Roads.SolmarDistrict.CarSpawn).
+            Pose districtSpawn = City.Roads.SolmarDistrict.CarSpawn;
+            spawner.car = city != null ? SpawnCar(SpawnXz.x, SpawnXz.z, Vector3.left) : SpawnCar(districtSpawn.position.x, districtSpawn.position.z, districtSpawn.forward);
             spawner.hud = go.AddComponent<VehicleHud>();
             spawner.hud.vehicle = spawner.car;
             spawner.hud.enabled = false;
