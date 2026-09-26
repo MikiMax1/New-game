@@ -67,6 +67,8 @@ Scene view straight away.
 - **Street furniture:** street lamps, traffic signals with lit LED heads, hydrants, litter bins,
   pay stations, signs, drains, manhole covers and a roadworks area.
 - **Palms:** planted in granite-edged tree pits with mulch and ground cover.
+- **Street details:** a bus shelter with a lit advert and its stop sign, benches, bollards at the
+  kerb ramps, newspaper boxes and a bike rack.
 - **Parked cars:** sedans, hatchbacks, SUVs, pickups and the odd taxi along both kerbs, with
   lofted bodies, wheel arches, tinted glass, five-spoke wheels and clear-coated paint. They keep
   clear of the crossing, the hydrants and the roadworks, and sit on the road's camber.

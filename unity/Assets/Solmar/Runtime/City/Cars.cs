@@ -86,7 +86,7 @@ namespace Solmar.City
 
         // Kerb-side stretches with no parking, as x ranges, per side (+1 north, -1 south). They
         // follow StreetFurniture: the crossing with 6 m clear either side, the hydrants (4.5 m
-        // either side), the roadworks in the north lane, and the no-parking signs.
+        // either side), the roadworks in the north lane, the no-parking signs and the bus stop.
         static readonly float CrossingClearFrom = Layout.CrossingX - Layout.CrosswalkWidth / 2f - 6f;
         static readonly float CrossingClearTo = Layout.CrossingX + Layout.CrosswalkWidth / 2f + 6f;
 
@@ -102,6 +102,7 @@ namespace Solmar.City
                 zones.Add(new Vector2(CrossingClearTo, -3f)); // no-parking sign at -3
                 zones.Add(new Vector2(0f, 9f));               // hydrant at 4.5
                 zones.Add(new Vector2(30f, 38f));             // loading zone at the sign at 34
+                zones.Add(new Vector2(StreetDetails.BusStopFrom, StreetDetails.BusStopTo));
             }
             return zones;
         }

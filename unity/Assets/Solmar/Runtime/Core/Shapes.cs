@@ -50,6 +50,11 @@ namespace Solmar
             return Transform(Matrix4x4.Translate(new Vector3(x, y, z)));
         }
 
+        public MeshData RotateX(float radians)
+        {
+            return Transform(Matrix4x4.Rotate(Quaternion.Euler(radians * Mathf.Rad2Deg, 0f, 0f)));
+        }
+
         public MeshData RotateY(float radians)
         {
             return Transform(Matrix4x4.Rotate(Quaternion.Euler(0f, radians * Mathf.Rad2Deg, 0f)));

@@ -25,6 +25,7 @@ dirt, and LODs. Everything stays procedural (no imported assets) unless a step s
 | Controls | Fly and walk (`F`), time of day (`[` `]` `T`), `F2` screenshots |
 | Sound | Synthesised city ambience |
 | Parked cars | Sedan, hatchback, SUV, pickup and taxi in both parking lanes (A1, first pass: needs a look in the Editor) |
+| Street details | Bus shelter, bus stop sign, benches, bollards, newspaper boxes, bike rack (A2, first pack) |
 
 ## Next, in order (small steps)
 

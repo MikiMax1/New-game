@@ -78,6 +78,7 @@ namespace Solmar
             RoadDecals.Build(root, materials, random);
             // After the decals, so adding cars leaves the puddles and markings where they were.
             Cars.Build(root, materials, random);
+            StreetDetails.Build(root, materials);
 
             if (createDaylight)
             {
