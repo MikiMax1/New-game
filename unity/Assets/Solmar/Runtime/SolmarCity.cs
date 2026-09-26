@@ -8,7 +8,7 @@ namespace Solmar
 {
     /// <summary>
     /// Generates the procedural city block when enabled, in the editor and in play mode: textures
-    /// (baked on the GPU), the street, buildings, street furniture, palms, road decals, parked cars, and the
+    /// (baked on the GPU), the street, buildings, street furniture, palms, road decals, parked cars, planting strips, and the
     /// daylight (sun, sky, fog, exposure and camera effects). Nothing is loaded from files and
     /// nothing generated is saved into the scene; it is rebuilt from the seed every time.
     /// </summary>
@@ -74,11 +74,13 @@ namespace Solmar
             AddSurface(root, "North pavement", Street.BuildPavement(1), materials.Pavement);
             AddSurface(root, "South pavement", Street.BuildPavement(-1), materials.Pavement);
             Buildings.Build(root, materials, random);
-            StreetFurniture.Build(root, materials, random);
+            GameObject furniture = StreetFurniture.Build(root, materials, random);
             RoadDecals.Build(root, materials, random);
             // After the decals, so adding cars leaves the puddles and markings where they were.
             Cars.Build(root, materials, random);
-            StreetDetails.Build(root, materials);
+            GameObject details = StreetDetails.Build(root, materials);
+            // Last, so the beds can keep clear of everything already on the pavement.
+            Planting.Build(root, materials, random, furniture.transform, details.transform);
 
             if (createDaylight)
             {

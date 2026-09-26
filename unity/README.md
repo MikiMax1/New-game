@@ -79,7 +79,9 @@ away. It's off in the repository's own Git checkout.
   - Shopfronts have lit interiors.
 - **Street furniture:** street lamps, traffic signals with lit LED heads, hydrants, litter bins,
   pay stations, signs, drains, manhole covers and a roadworks area.
-- **Palms:** planted in granite-edged tree pits with mulch and ground cover.
+- **Planting strips:** raised granite-edged beds along both kerbs with grass, shrubs and
+  bougainvillea, and the palms growing in them. They keep clear of the lamps, signs, crossing
+  and bus stop, with gaps to step through from parked cars.
 - **Street details:** a bus shelter with a lit advert and its stop sign, benches, bollards at the
   kerb ramps, newspaper boxes and a bike rack.
 - **Parked cars:** sedans, hatchbacks, SUVs, pickups and the odd taxi along both kerbs, with

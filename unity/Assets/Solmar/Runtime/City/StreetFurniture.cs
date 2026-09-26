@@ -9,7 +9,6 @@ namespace Solmar.City
     /// Street furniture placed from Layout (distances from the kerb face):
     ///   lamps     0.7 m back (poles clear the kerb by 0.45 m), every LampSpacing, the two sides
     ///             staggered by half a spacing; arms reach 2.3 m over the road
-    ///   palms     in 1.4 m granite-edged tree pits, 1.0 m back, halfway between lamps
     ///   signals   mast-arm poles on the far side of the crossing for each direction (drive on the
     ///             right), 0.8 m back; heads over the lane centres 5.3 m up, facing the traffic;
     ///             pedestrian heads on the poles facing across the crosswalk
@@ -89,16 +88,6 @@ namespace Solmar.City
                 { "housing", m.Painted(new Color(0.55f, 0.57f, 0.57f), 0.35f) },
                 { "lens", LampsOn ? m.Emissive(new Color(1f, 0.89f, 0.72f), 30000f) : lensOff },
             }, lamps);
-
-            // Palms in tree pits, halfway between lamps (clear of the crossing).
-            var palms = new List<Vector3>();
-            foreach (Placement l in lamps)
-            {
-                float x = l.x + Layout.LampSpacing / 2f;
-                float z = Mathf.Sign(l.z) * (Layout.KerbZ + 1.0f);
-                if (Mathf.Abs(x) < Layout.StreetHalfLength - 2f && Mathf.Abs(x - Layout.CrossingX) > 4f) palms.Add(new Vector3(x, Street.Height(x, z), z));
-            }
-            Palms.Build(root.transform, palms, m, random);
 
             // Signals. Traffic heading +x uses the north lanes (z > 0): its pole stands on the north
             // pavement past the crossing and its arm reaches south over those lanes, the heads facing

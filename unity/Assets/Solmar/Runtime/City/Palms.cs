@@ -20,7 +20,8 @@ namespace Solmar.City
     {
         const float Pit = 1.4f;
 
-        public static void Build(Transform parent, IList<Vector3> bases, CityMaterials m, Rng random)
+        /// <param name="pits">Give each palm its own tree pit; off when they stand in a planting bed.</param>
+        public static void Build(Transform parent, IList<Vector3> bases, CityMaterials m, Rng random, bool pits = true)
         {
             var trunks = new MeshData();
             var leaves = new MeshData();
@@ -32,7 +33,7 @@ namespace Solmar.City
             var cover = new MeshData();
             foreach (Vector3 b in bases)
             {
-                TreePit(b, edging, soil, cover, random);
+                if (pits) TreePit(b, edging, soil, cover, random);
                 Tree(b, trunks, leaves, dead, stems, nuts, random);
             }
             var root = new GameObject("Palms");
