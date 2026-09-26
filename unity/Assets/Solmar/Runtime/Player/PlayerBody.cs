@@ -20,6 +20,11 @@ namespace Solmar
 
         HumanBody body;
 
+        /// <summary>The grown body: other player companions (combat, vaulting, swimming, the health
+        /// state) reach its <see cref="HumanBody.Bones"/> and <see cref="HumanBody.Animator"/> through
+        /// this to pose or freeze it directly.</summary>
+        public HumanBody Body => body;
+
         void Awake()
         {
             var bodyGo = new GameObject("Human");
@@ -58,6 +63,7 @@ namespace Solmar
                 {
                     body.Animator.referenceWalkSpeed = character.walkSpeed;
                     body.Animator.referenceRunSpeed = character.runSpeed;
+                    body.Animator.crouch01 = character.Crouch01;
                 }
                 body.Tick(character.Velocity, character.Grounded, Time.deltaTime);
             }

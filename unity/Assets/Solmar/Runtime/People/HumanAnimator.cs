@@ -38,7 +38,26 @@ namespace Solmar.People
         public float leanIntoAccelDeg = 10f;
         public float headStabilise = 0.65f;
 
-        float gaitPhase, moveWeight, breathePhase, idlePhase;
+        // ---- Player-only pose layers: NPCs never touch these, so they default to "off" and change
+        // nothing about the walk/idle cycle pedestrians already share this animator for. ----
+
+        /// <summary>0 standing .. 1 fully crouched: lowers the stance and adds a knee/hip flex on top
+        /// of the normal gait.</summary>
+        public float crouch01;
+        /// <summary>True to replace the walk/run cycle with a breaststroke swim cycle entirely.</summary>
+        public bool swimming;
+        /// <summary>0 = no punch in progress; while 0&lt;t&lt;1 across the strike, overrides the right arm.
+        /// <see cref="punchVariant"/> (0/1 jab, 2 hook) picks the shape.</summary>
+        public float punchBlend01;
+        public int punchVariant;
+        /// <summary>0 = no kick in progress; while 0&lt;t&lt;1 across the strike, overrides the right leg
+        /// (chambers the knee, then extends).</summary>
+        public float kickBlend01;
+        /// <summary>While true, <see cref="Tick"/> does nothing at all, leaving every bone exactly as
+        /// whoever froze it (a vault, a climb, a knockdown) last posed it directly.</summary>
+        public bool poseFrozen;
+
+        float gaitPhase, moveWeight, breathePhase, idlePhase, swimPhase;
         float speedSmoothed;
         Vector3 prevHorizontalDir = Vector3.forward;
         float airTime;
@@ -56,7 +75,15 @@ namespace Solmar.People
         /// </summary>
         public void Tick(Vector3 velocity, bool grounded, float dt, LayerMask groundMask)
         {
+            if (poseFrozen) return;
             dt = Mathf.Max(0f, dt);
+
+            if (swimming)
+            {
+                TickSwim(velocity, dt);
+                return;
+            }
+
             Vector3 horizontal = new Vector3(velocity.x, 0f, velocity.z);
             float speed = horizontal.magnitude;
             Vector3 dir = speed > 0.05f ? horizontal / speed : prevHorizontalDir;
@@ -102,6 +129,108 @@ namespace Solmar.People
             AnimateArm(bones.rightShoulder, bones.rightElbow, bones.rightWrist, gaitPhase, armSwingDeg, airFactor);
 
             AnimateTorsoAndHead(turnRate, accel, airFactor, justLanded);
+            ApplyMeleeOverrides();
+        }
+
+        /// <summary>Punch/kick are one-shot overrides on top of whatever the walk cycle just set: applied
+        /// last so a strike always reads clearly even mid-stride.</summary>
+        void ApplyMeleeOverrides()
+        {
+            if (punchBlend01 > 0.0001f) ApplyPunchPose(Mathf.Clamp01(punchBlend01));
+            if (kickBlend01 > 0.0001f) ApplyKickPose(Mathf.Clamp01(kickBlend01));
+        }
+
+        void ApplyPunchPose(float t)
+        {
+            Transform shoulder = bones.rightShoulder, elbow = bones.rightElbow, wrist = bones.rightWrist;
+            if (shoulder == null || elbow == null) return;
+            bool hook = punchVariant == 2;
+            // 0..0.5 extend outwards, 0.5..1 retract back to guard; eased both ways.
+            float extend = t < 0.5f ? Ease(t * 2f) : Ease((1f - t) * 2f);
+
+            float pitch = hook ? Mathf.Lerp(20f, -8f, extend) : Mathf.Lerp(20f, -78f, extend);
+            float yaw = hook ? Mathf.Lerp(6f, 68f, extend) : Mathf.Lerp(6f, -4f, extend);
+            float roll = hook ? Mathf.Lerp(-8f, -46f, extend) : -8f;
+            float elbowDeg = hook ? Mathf.Lerp(12f, 78f, extend) : Mathf.Lerp(12f, 6f, extend);
+
+            shoulder.localRotation = Quaternion.Euler(pitch, yaw, roll);
+            elbow.localRotation = Quaternion.Euler(elbowDeg, 0f, 0f);
+            if (wrist != null) wrist.localRotation = Quaternion.Euler(-6f, 0f, 0f);
+        }
+
+        void ApplyKickPose(float t)
+        {
+            Transform hip = bones.rightHip, knee = bones.rightKnee, ankle = bones.rightAnkle;
+            if (hip == null || knee == null) return;
+            // Chamber the knee up through the first third, extend the leg forward through the middle,
+            // then bring it back down.
+            float chamber = Mathf.Clamp01(t / 0.32f);
+            float extend = Mathf.Clamp01((t - 0.32f) / 0.36f);
+            float recover = Mathf.Clamp01((t - 0.68f) / 0.32f);
+
+            float hipDeg = Mathf.Lerp(0f, -70f, Ease(extend)) - Mathf.Lerp(0f, 15f, Ease(chamber)) * (1f - extend);
+            hipDeg = Mathf.Lerp(hipDeg, 0f, Ease(recover));
+            float kneeDeg = Mathf.Lerp(10f, 100f, Ease(chamber));
+            kneeDeg = Mathf.Lerp(kneeDeg, 12f, Ease(extend));
+            kneeDeg = Mathf.Lerp(kneeDeg, 10f, Ease(recover));
+
+            hip.localRotation = Quaternion.Euler(hipDeg, 0f, 0f);
+            knee.localRotation = Quaternion.Euler(kneeDeg, 0f, 0f);
+            if (ankle != null) ankle.localRotation = Quaternion.Euler(-10f, 0f, 0f);
+            if (bones.spine != null)
+                bones.spine.localRotation *= Quaternion.Euler(-6f * Ease(extend), -10f * Ease(extend), 0f);
+        }
+
+        static float Ease(float x)
+        {
+            float c = Mathf.Clamp01(x);
+            return c * c * (3f - 2f * c);
+        }
+
+        /// <summary>A breaststroke cycle in place of the normal walk/run gait: both arms sweep out and
+        /// pull back together, legs frog-kick, the torso pitches forward to keep the head above the
+        /// (roughly) waterline. Doesn't touch the foot-planting IK — there's no ground to plant on.</summary>
+        void TickSwim(Vector3 velocity, float dt)
+        {
+            Vector3 horizontal = new Vector3(velocity.x, 0f, velocity.z);
+            float speed = horizontal.magnitude;
+            swimPhase += dt * Mathf.Lerp(0.55f, 1.25f, Mathf.Clamp01(speed / 2.2f));
+            swimPhase -= Mathf.Floor(swimPhase);
+            float cycle = swimPhase * Mathf.PI * 2f;
+
+            AnimateSwimArm(bones.leftShoulder, bones.leftElbow, bones.leftWrist, 1f, cycle);
+            AnimateSwimArm(bones.rightShoulder, bones.rightElbow, bones.rightWrist, -1f, cycle);
+            AnimateSwimLeg(bones.leftHip, bones.leftKnee, bones.leftAnkle, cycle);
+            AnimateSwimLeg(bones.rightHip, bones.rightKnee, bones.rightAnkle, cycle);
+
+            if (bones.pelvis != null)
+            {
+                bones.pelvis.localPosition = bones.pelvisRestLocalPos + Vector3.up * (Mathf.Sin(cycle * 2f) * 0.02f);
+                bones.pelvis.localRotation = Quaternion.Euler(-6f, 0f, Mathf.Sin(cycle) * 4f);
+            }
+            if (bones.spine != null) bones.spine.localRotation = Quaternion.Euler(-16f, 0f, 0f);
+            if (bones.chest != null) bones.chest.localRotation = Quaternion.Euler(8f, 0f, 0f);
+            if (bones.head != null) bones.head.localRotation = Quaternion.Euler(20f, 0f, 0f);
+        }
+
+        static void AnimateSwimArm(Transform shoulder, Transform elbow, Transform wrist, float side, float cycle)
+        {
+            if (shoulder == null || elbow == null) return;
+            float pitch = -55f + Mathf.Sin(cycle) * 65f;
+            float outAngle = Mathf.Cos(cycle) * 30f;
+            shoulder.localRotation = Quaternion.Euler(pitch, 0f, side * (22f + outAngle));
+            float elbowBend = 15f + Mathf.Clamp01(-Mathf.Sin(cycle)) * 65f;
+            elbow.localRotation = Quaternion.Euler(elbowBend, 0f, 0f);
+            if (wrist != null) wrist.localRotation = Quaternion.Euler(-8f, 0f, 0f);
+        }
+
+        static void AnimateSwimLeg(Transform hip, Transform knee, Transform ankle, float cycle)
+        {
+            if (hip == null || knee == null) return;
+            float phase = Mathf.Clamp01(Mathf.Sin(cycle + Mathf.PI * 0.15f) * 0.5f + 0.5f);
+            hip.localRotation = Quaternion.Euler(8f + phase * 16f, 0f, 0f);
+            knee.localRotation = Quaternion.Euler(20f + phase * 55f, 0f, 0f);
+            if (ankle != null) ankle.localRotation = Quaternion.identity;
         }
 
         void AnimateArm(Transform shoulder, Transform elbow, Transform wrist, float phase, float swingDeg, float airFactor)
@@ -129,7 +258,7 @@ namespace Solmar.People
 
             if (bones.pelvis != null)
             {
-                float squat = Mathf.Lerp(0f, -0.06f, airFactor);
+                float squat = Mathf.Lerp(0f, -0.06f, airFactor) - crouch01 * 0.32f;
                 bones.pelvis.localPosition = bones.pelvisRestLocalPos + new Vector3(sway, bob + squat, 0f);
                 bones.pelvis.localRotation = Quaternion.Euler(0f, yaw, roll);
             }
@@ -138,7 +267,7 @@ namespace Solmar.People
             float turnLean = Mathf.Clamp(-turnRate * 0.05f, -leanIntoTurnDeg, leanIntoTurnDeg);
             float accelLean = Mathf.Clamp(-accel * 2.2f, -leanIntoAccelDeg, leanIntoAccelDeg);
             float landCrouch = justLanded ? 8f : 0f;
-            if (bones.spine != null) bones.spine.localRotation = Quaternion.Euler(accelLean * 0.5f + landCrouch, 0f, turnLean * 0.5f);
+            if (bones.spine != null) bones.spine.localRotation = Quaternion.Euler(accelLean * 0.5f + landCrouch + crouch01 * 20f, 0f, turnLean * 0.5f);
 
             float breathePitch = breatheAmplitudeDeg * Mathf.Sin(breathePhase * Mathf.PI * 2f) * (1f - moveWeight);
             if (bones.chest != null)
@@ -164,8 +293,8 @@ namespace Solmar.People
         {
             if (hip == null || knee == null || ankle == null) return;
             float cycle = phase * Mathf.PI * 2f;
-            float hipSwing = -Mathf.Sin(cycle) * swingDeg * moveWeight;
-            float kneeSwing = 4f + Mathf.Max(0f, -Mathf.Cos(cycle)) * kneeBendMax * moveWeight;
+            float hipSwing = -Mathf.Sin(cycle) * swingDeg * moveWeight - crouch01 * 10f;
+            float kneeSwing = 4f + Mathf.Max(0f, -Mathf.Cos(cycle)) * kneeBendMax * moveWeight + crouch01 * 34f;
 
             // Airborne: knees tuck up, hips flex, ready to absorb a landing.
             hipSwing = Mathf.Lerp(hipSwing, -18f, airFactor);

@@ -13,13 +13,16 @@ namespace Solmar.UI
     {
         const float MaxHealthDefault = 100f;
         const float MaxArmourDefault = 100f;
+        const float MaxStaminaDefault = 100f;
         const float WantedRecentSeconds = 6f;
 
         public static float MaxHealth = MaxHealthDefault;
         public static float MaxArmour = MaxArmourDefault;
+        public static float MaxStamina = MaxStaminaDefault;
 
         static float health = MaxHealthDefault;
         static float armour;
+        static float stamina = MaxStaminaDefault;
         static long money = 500;
         static int wantedLevel;
         static float wantedChangedAtTime = float.NegativeInfinity;
@@ -28,6 +31,14 @@ namespace Solmar.UI
         {
             get => health;
             set => health = Mathf.Clamp(IsFinite(value) ? value : 0f, 0f, MaxHealth);
+        }
+
+        /// <summary>0-100: drains while the player sprints and regenerates while they don't. Written by
+        /// <see cref="PlayerCharacter"/>, read by the HUD.</summary>
+        public static float Stamina
+        {
+            get => stamina;
+            set => stamina = Mathf.Clamp(IsFinite(value) ? value : 0f, 0f, MaxStamina);
         }
 
         public static float Armour

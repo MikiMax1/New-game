@@ -422,6 +422,14 @@ namespace Solmar.Pedestrians
             Fall(dir.normalized * Mathf.Clamp(rel, 2f, 9f));
         }
 
+        /// <summary>External impact (a player's punch, kick, or anything else that should knock this
+        /// pedestrian down) — the same reaction as being hit by a car.</summary>
+        public void Knockdown(Vector3 impulse)
+        {
+            if (!Active || state == PedState.Fallen) return;
+            Fall(impulse);
+        }
+
         void Fall(Vector3 impulse)
         {
             state = PedState.Fallen;

@@ -8,7 +8,7 @@ namespace Solmar
     public sealed class HelpOverlay : MonoBehaviour
     {
         const string Text =
-            "Walk: W A S D, Shift runs, Space jumps; click to look around (Esc frees the mouse), scroll zooms\n" +
+            "On foot: W A S D, Shift sprints, Alt walks, Ctrl crouches, Space jumps/vaults/climbs; left click punches, F kicks\n" +
             "G by the red car: get in / out (W S drive, A D steer, Space handbrake, V camera, X stability control, Q horn)\n" +
             "C: free-fly camera (hold right mouse + W A S D, Q/E down/up, Shift faster)\n" +
             "[ ]: time of day   hold T: fast-forward (lamps and windows light up at night)   K: weather\n" +
