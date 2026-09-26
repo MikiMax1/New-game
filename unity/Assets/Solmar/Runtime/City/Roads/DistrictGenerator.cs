@@ -28,6 +28,7 @@ namespace Solmar.City.Roads
             root.SetParent(parent, false);
 
             RoadGraph graph = BuildGraph(out int[,] nodeAt);
+            RoadGraph.Current = graph;
 
             var road = new MeshData();
             var medianEdging = new MeshData();

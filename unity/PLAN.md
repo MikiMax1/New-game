@@ -4,133 +4,109 @@
 spirit of GTA VI. You walk, drive, fight and do missions in a living city with traffic, people,
 police, day and night, and weather.
 
-## Honest scope
-
-GTA VI was made by roughly 2,000 people over about ten years, so an exact match isn't realistic.
-What is realistic is a **compact, polished open world**: about 3 × 3 km with downtown, a beach
-strip, neighbourhoods, a port and a highway. It has drivable cars, traffic, pedestrians, police,
-a phone and map, and a short story with side activities. It should look as close to real life as
-HDRP allows.
-
 **Rule (Max's choice): everything is made in code by Claude.** No bought or downloaded models,
-textures or animations. That means:
+textures, animations or sounds. People and cars are built from procedural meshes and animated in
+code; textures are baked by compute shaders; sound is synthesised.
 
-- **City, buildings, props, vegetation, lighting and water** can look very convincing in code.
-- **Cars** get rebuilt with sharper panels, real wheel arches, inset glass and pillars, detailed
-  lamps and trim. They'll be good at street distance, but not photo-real up close.
-- **People** are the hardest part: code-built bodies with procedural animation (walk cycles and
-  inverse kinematics). They'll read as people at a distance but look stylised up close. Keeping
-  crowds at street distance and using good lighting helps.
-- **Sound and music** are synthesised.
-
-**How I work:** small steps, each one playable. After each step you playtest and send screenshots
-and F3 numbers. Updates reach RealisticGame by themselves within two minutes (Solmar > Auto Update; the private repo needs Solmar > Set GitHub Token... once). I do the work
-myself and only use sub-agents for big, separable jobs, to save your usage.
+**How the work runs:** helpers (sub-agents) build separate pieces in parallel, each in its own
+files. Each piece is compile-checked, pushed, and reaches Max's Unity by itself (Solmar > Auto
+Update, every two minutes). Max playtests and sends screenshots, clips and F3 numbers, and the
+next wave fixes what's wrong.
 
 ---
 
 ## Done so far
 
-- One downtown street at golden hour, with wet asphalt, puddles, decals and kerbs.
-- Buildings (Art Deco, MiMo, classic, glass towers) with rooms behind the windows.
-- Street lamps, signals, hydrants, a bus shelter, benches, bollards, news boxes, parked cars, palms.
-- Physical sky, volumetric clouds and fog, soft shadows, reflections, synthesised city sound.
-- Fly and walk cameras, time of day, screenshots, Low to Extreme presets, no fps cap, the F3 overlay.
-- Auto-update into your Unity project, and a guard against broken meshes.
-- Palms in planted beds (1.1), more realistic cars (1.3), help overlay (1.4).
-- First road-network generator and a 4 × 4-block district (2.1, first cut of 2.2).
-- A third-person player with a code-built body and procedural walk (first cut of 3.1 and 3.2).
-- A drivable car with a chase camera and speedometer (first cut of 4.1 and 4.2).
-- Street lamps, windows and shops that light up at night (first cut of 5.3).
+- Street scene at golden hour; buildings with rooms behind the windows; palms in planted beds.
+- Street lamps, signals, bus shelter, benches, parked cars; night lighting for the street.
+- Sky, volumetric clouds and fog, soft shadows, reflections, synthesised city sound.
+- First road-network generator and a 4 × 4-block district.
+- A third-person player (first cut), a drivable car (first cut).
+- F3 performance overlay, F5 quality presets, F6 fps cap, H help, auto-update.
 
-**What's wrong now (from your playtest):** it's one straight road that ends in nothing, and the
-palms stand in concrete, and the cars look fake. Phases 1 and 2 fix all three.
+## What Max's playtest found (26 Sep)
+
+| Problem | Fixed by |
+|---|---|
+| The car slides out and turns too sharply, and it's slow | A1 |
+| The map is a straight line, not a city | M1–M4 |
+| The player looks like a mannequin with its arms stuck up | P1–P2 |
+| No people on the streets | L2 |
+| No traffic | L1 |
+| Cars still look fake | V1 |
+| The road is soaking wet when it hasn't rained | W1 |
 
 ---
 
-## Phase 1: Streets that look right (small, starts now)
+## Wave 1 (running now)
 
-| # | Work |
+| # | Piece | What it gives you |
+|---|---|---|
+| **M1** | **A real city map** | A 2 × 2 km city, not a straight line: a downtown grid with a diagonal avenue, curving residential streets, a coastal boulevard along the beach, a waterfront, parks and plazas, blocks of different sizes and shapes, and dead-end-free streets. It becomes the default scene you play in |
+| **A1** | **Driving that feels right** | Real acceleration (0–100 km/h in about 6 s, top speed about 200 km/h), gears, speed-sensitive steering, grip that lets go progressively instead of spinning out, stability control you can switch off, anti-roll, downforce, and a chase camera that settles |
+| **W1** | **Weather and dry roads** | Dry asphalt by default; rain showers and thunderstorms that wet the road, fill puddles and slowly dry out; rain and splashes; weather cycles on its own (`K` cycles it by hand) |
+| **P1** | **A realistic person** | A properly proportioned code-built body with a real head, hands, clothes and hair; arms hang naturally; smooth walk, run, idle and jump animation with foot placement; different looks (body type, skin, clothes) for everyone |
+| **V1** | **Better-looking cars** | Car bodies from real proportions with smooth curved panels, proper glass, lights, grilles, rims and interiors; several models (sedan, SUV, sports car, taxi, pickup, van) |
+| **L1** | **Traffic** | Cars that drive the road network in lanes, stop at red lights, turn at junctions, keep their distance, and brake for you |
+
+## Wave 2 (next)
+
+| # | Piece |
 |---|---|
-| 1.1 | **Palms in soil, not concrete.** A landscaped median with grass, shrubs and royal palms; grass swales between the kerb and the sidewalk on residential streets; raised stone planters with ground cover downtown. No palm in bare paving |
-| 1.2 | Close the street ends: a T-junction with cross streets and buildings, so there's no void |
-| 1.3 | **Better cars, in code.** Rebuild the bodies from real car proportions: sharp creases and shoulder lines, proper wheel arches with liners, a separate bumper, grille and lamp clusters, inset glass with black pillars and window trim, door gaps, mirrors on arms, chrome and rubber trim, detailed rims with brake discs, and car paint with metallic flakes |
-| 1.4 | Scene tidy-up: hide the editor grid and gizmos in the Game view, a default camera at eye level, and a small help overlay (`H`) listing the keys |
+| **L2** | **Pedestrians**: people on every pavement, walking, waiting at crossings, sitting, chatting, using phones; they dodge you, flee from danger and react to crashes |
+| **L3** | Night lighting across the whole map (lamps, windows, neon signs, headlights, tail lights) |
+| **P2** | Player moves: sprint with stamina, climb low walls and fences, vault, fall and ragdoll, swim, punch and kick |
+| **A2** | Get into any car: open the door, pull the driver out, hot-wire parked cars; car doors and seats |
+| **A3** | Damage: dents, broken glass and lights, smoke, fire and explosions; flat tyres |
+| **H1** | **HUD**: minimap with roads and GPS route, health and armour, money, wanted stars, weapon |
+| **H2** | Full-screen map with waypoints (click to set a route) |
+| **S1** | Sound: engines by RPM and gear, tyre squeal, crashes, footsteps by surface, rain and thunder |
 
-## Phase 2: A real city layout
+## Wave 3: Gameplay
 
-| # | Work |
+| # | Piece |
 |---|---|
-| 2.1 | **Road network generator**: a graph of streets (grid downtown, curving roads in the suburbs, avenues with medians) that builds every road, intersection, crosswalk, kerb ramp, lane marking and signal from the graph |
-| 2.2 | **Blocks and lots**: split the space between roads into blocks, then lots; buildings fill lots by district (towers, Art Deco hotels, shops, houses with yards, pools and fences, warehouses, parking lots) |
-| 2.3 | **Streaming**: the city in 200 m tiles built off the main thread and loaded around the player, with levels of detail (full < 250 m, simple < 1 km, merged blocks beyond) |
-| 2.4 | **First district, 1 × 1 km downtown**: playable end to end |
-| 2.5 | **Coast**: beach, dunes, boardwalk and lifeguard towers; ocean and bay with HDRP Water (waves, foam, caustics) |
-| 2.6 | **More districts**: South Beach-style Art Deco strip, Little Havana-style shops, suburbs, port with cranes and containers, Wynwood-style murals; causeway bridges and an elevated highway loop. Target 3 × 3 km |
-| 2.7 | Optional: real street layouts from **OpenStreetMap** (renamed), needs `overpass-api.de` allowed |
+| **G1** | **Police and wanted level**: crimes raise heat; patrols, sirens, chases, roadblocks, a helicopter with a spotlight; escape by breaking line of sight; busted and wasted |
+| **G2** | Weapons and combat: pistols, SMGs, rifles, shotguns; aim, cover, recoil, hit reactions, ammo, weapon wheel |
+| **G3** | **Missions**: objectives, markers, checkpoints, cutscene cameras, fail and retry |
+| **G4** | Story: 12–15 missions over a short arc with two playable characters |
+| **G5** | Side activities: street races, taxi jobs, deliveries, stunt jumps, collectibles, a boat race |
+| **G6** | Money: wallet, bank, shops (clothes, weapons, cars), buying a safehouse and garage |
+| **G7** | Phone: contacts, texts, missions, map, camera and a social feed |
+| **G8** | Save and load, pause menu, settings (graphics, controls, audio), key rebinding, gamepad |
+| **G9** | Character stats that improve with use: driving, shooting, stamina |
 
-## Phase 3: The player
+## Wave 4: A bigger, richer world
 
-| # | Work |
+| # | Piece |
 |---|---|
-| 3.1 | Third-person character controller: walk, run, sprint, jump, climb low walls, swim; an orbit camera with collision |
-| 3.2 | A code-built character (body, clothes, hair) with procedural animation: walk and run cycles, foot placement with inverse kinematics, turning and idle motion |
-| 3.3 | Health, stamina, ragdoll on falls and hits |
+| **M2** | Districts with their own look: glass-tower downtown, Art Deco beach strip, Little Havana-style shops, Wynwood-style murals, suburbs with houses, pools and fences, an industrial port with cranes and containers |
+| **M3** | Coast and water: beach, dunes, boardwalk, lifeguard towers, marina and boats; ocean and bay with HDRP Water (waves, foam, caustics) |
+| **M4** | Highways and bridges: an elevated highway loop, on-ramps, causeway bridges to islands; grows to about 4 × 4 km |
+| **M5** | Streaming and levels of detail, so the whole map runs smoothly: tiles loaded around the player, simpler buildings far away |
+| **M6** | Enterable interiors: shops, a bar, a garage, the safehouse, a police station |
+| **M7** | Landmarks: a stadium, a hotel tower, a pier with a Ferris wheel, an airport strip |
+| **L4** | More vehicles: buses, trucks, police cars, ambulances, fire trucks, motorbikes, bicycles, boats, a helicopter |
+| **L5** | Radio stations with synthesised music and DJ jingles |
+| **L6** | Animals: birds, seagulls, pelicans, dogs on leads |
+| **L7** | City life by time of day: rush hours, nightlife crowds, empty streets at dawn; events like street parties |
 
-## Phase 4: Driving
+## Wave 5: The "insane touchups" (continuous, and a big pass at the end)
 
-| # | Work |
+| # | Piece |
 |---|---|
-| 4.1 | Car physics on WheelColliders: engine and gear curves, grip by surface, handbrake, drifts; chase, bonnet and interior cameras |
-| 4.2 | Get in and out of any car (steal parked ones), with door and seat animations once the character is in |
-| 4.3 | Damage: dents, broken glass and lights, smoke, fire |
-| 4.4 | Vehicle set: 10–15 procedural types (sedans, SUVs, sports cars, taxi, police, bus, trucks, bikes, boats). Optional: swap in bought hero models |
-| 4.5 | Car radio stations (synthesised music at first) |
-
-## Phase 5: A living city
-
-| # | Work |
-|---|---|
-| 5.1 | **Traffic AI** on the road graph: lanes, signals, turns, yielding, lane changes, no pile-ups; reacts to the player |
-| 5.2 | **Pedestrians**: walk the sidewalks and crossings, wait at lights, sit on benches, flee from danger, crowd density by district and hour |
-| 5.3 | Night: every street light, window, sign and headlight is a light source; neon districts |
-| 5.4 | Weather: clear, humid, overcast, rain and thunderstorms; wet roads that dry; rain on cars |
-| 5.5 | City sound: engines by RPM, horns, sirens, crowds, waves, rain, by district and time |
-
-## Phase 6: Gameplay
-
-| # | Work |
-|---|---|
-| 6.1 | **HUD**: minimap with GPS route, health, money, wanted stars |
-| 6.2 | **Police and wanted level**: crimes raise heat; patrols, chases, roadblocks, helicopters; escape by breaking line of sight |
-| 6.3 | Weapons and combat: aim, cover, hit reactions (weapon models procedural at first) |
-| 6.4 | **Phone**: contacts, missions, map, camera |
-| 6.5 | **Missions framework**: scripted objectives, checkpoints, cutscene cameras, fail and retry |
-| 6.6 | Story: 10–15 missions over a short arc, plus side activities (street races, taxi jobs, deliveries, stunt jumps) |
-| 6.7 | Money, shops (clothes, cars, safehouse), save and load, pause menu, settings (graphics, controls, audio), gamepad support |
-
-## Phase 7: The "insane touchups" (continuous, and a big pass at the end)
-
-| # | Work |
-|---|---|
-| 7.1 | Richer procedural textures with anti-tiling; dirt, cracks, oil, litter and tyre marks as decals |
-| 7.2 | Ray-traced reflections, GI and shadows on Extreme (RTX GPUs); DLSS or FSR upscaling |
-| 7.3 | Cinematic colour grade matched to the GTA VI trailer look; lens effects; photo mode |
-| 7.4 | Close-up detail: parallax bricks and pavers, interiors you can enter in key buildings, detailed car interiors |
-| 7.5 | Performance: target 60+ fps at 1440p on High on a mid-range RTX card, and uncapped on Extreme for strong PCs; automatic tests for floating or overlapping objects |
+| **T1** | Richer textures with anti-tiling; dirt, cracks, oil stains, litter and tyre marks |
+| **T2** | Ray-traced reflections, GI and shadows on Extreme; DLSS or FSR upscaling |
+| **T3** | A cinematic colour grade like the GTA VI trailer; lens effects; photo mode |
+| **T4** | Close-up detail: parallax bricks and pavers, detailed car interiors, faces with expressions |
+| **T5** | Physics: breakable props (bins, hydrants that spray, signs, fences), debris, water splashes |
+| **T6** | Performance: 60+ fps at 1440p on High on a mid-range RTX card; automatic checks for floating or overlapping objects |
+| **T7** | Menus and presentation: title screen, loading screen, credits |
 
 ---
-
-## First concrete steps
-
-1. **1.1 Palms in soil**: median, swales and planters on the current street.
-2. **1.2 Close the street ends** with cross streets.
-3. **1.3 Better cars, in code.**
-4. **2.1 Road network generator**, then 2.2 blocks, giving a first grid of about 4 × 4 blocks you can walk and fly around.
-
-Each step: compile check, push, auto-update into your Unity, you playtest.
 
 ## What I need from you
 
-1. Screenshots and F3 numbers after each step.
-2. Optional: allow `overpass-api.de` in this environment's network settings, if you want real street layouts from OpenStreetMap (step 2.7).
+1. After each update: play it, then send screenshots or a short clip and what feels wrong.
+2. F3 numbers if anything stutters.
+3. For automatic updates: a GitHub token once (Solmar > Set GitHub Token...), or make the repo public.

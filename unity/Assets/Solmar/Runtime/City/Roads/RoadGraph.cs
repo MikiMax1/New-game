@@ -49,6 +49,10 @@ namespace Solmar.City.Roads
     /// </summary>
     public sealed class RoadGraph
     {
+        /// <summary>The road network of the map being played, set by the generator that built it
+        /// (for traffic, pedestrians and the minimap). Null when there is none.</summary>
+        public static RoadGraph Current;
+
         public readonly List<RoadNode> Nodes = new List<RoadNode>();
         public readonly List<RoadEdge> Edges = new List<RoadEdge>();
 
