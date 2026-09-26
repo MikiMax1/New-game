@@ -4,9 +4,11 @@ using UnityEngine;
 namespace Solmar.City
 {
     /// <summary>
-    /// Small shape helpers for procedural cars that don't fit the generic body loft: the concave
-    /// underside of a wheel arch, and a simple brake disc glimpsed behind the rim's spokes. Both are
-    /// built directly (not lofted from a style) since they are plain constant-radius forms.
+    /// Small shape helpers for procedural cars that don't fit the generic body loft in
+    /// <see cref="Solmar.Vehicles.CarBuilder"/>: the concave underside of a wheel arch, a brake disc
+    /// glimpsed behind the rim's spokes, an exhaust tip and a steering wheel ring. All are built
+    /// directly (not lofted from a spec) since they are plain constant-radius forms. Local frame: x
+    /// forward, y up, z left; origin usually at the part's own natural centre.
     /// </summary>
     static class CarParts
     {
@@ -14,9 +16,8 @@ namespace Solmar.City
         /// The dark cavity behind a wheel arch's cut-out: a semicircular strip of radius `radius`,
         /// swept along z by `zWidth`, centred on the wheel's axle-height centre and facing inward (so
         /// from outside the car it reads as the arch liner, not a hole through to the sky). Matches
-        /// the circular arch cut in <see cref="Cars"/>'s body-bottom profile, which is also a
-        /// semicircle about the same centre. Local frame: x forward, y up, z left; origin at the
-        /// wheel centre.
+        /// the circular arch cut in the body-bottom profile, which is also a semicircle about the
+        /// same centre. Origin at the wheel centre.
         /// </summary>
         public static MeshData ArchLiner(float radius, float zWidth, int segments = 20)
         {
@@ -53,7 +54,7 @@ namespace Solmar.City
             }, 22);
         }
 
-        /// <summary>A short round exhaust tip, revolved about y like <see cref="Cars"/>'s tyres and rims.</summary>
+        /// <summary>A short round exhaust tip, revolved about y like a wheel's tyre and rim.</summary>
         public static MeshData ExhaustTip(float radius, float length)
         {
             radius = Mathf.Max(0.01f, radius);
@@ -62,6 +63,23 @@ namespace Solmar.City
             {
                 new Vector2(radius * 0.72f, 0f), new Vector2(radius, 0.012f), new Vector2(radius, length), new Vector2(radius * 0.82f, length),
             }, 16);
+        }
+
+        /// <summary>
+        /// A steering-wheel rim: a torus of the given ring and tube radius, lying flat in the x-z
+        /// plane (its axis is y) so the caller tilts and positions it in the cabin.
+        /// </summary>
+        public static MeshData SteeringWheelRing(float ringRadius, float tubeRadius, int ringSegments = 18, int tubeSegments = 8)
+        {
+            ringRadius = Mathf.Max(0.02f, ringRadius);
+            tubeRadius = Mathf.Max(0.002f, tubeRadius);
+            var profile = new List<Vector2>(tubeSegments + 1);
+            for (int i = 0; i <= tubeSegments; i++)
+            {
+                float a = (float)i / tubeSegments * Mathf.PI * 2f;
+                profile.Add(new Vector2(ringRadius + tubeRadius * Mathf.Cos(a), tubeRadius * Mathf.Sin(a)));
+            }
+            return Shapes.Lathe(profile, ringSegments);
         }
     }
 }
