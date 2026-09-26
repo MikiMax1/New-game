@@ -25,6 +25,14 @@ when the scene loads. The project has no model, image or HDRI files.
 The city is generated in the editor as well as in Play mode, so you can fly around it in the
 Scene view straight away.
 
+## Keep a copy up to date
+
+If you copy `Assets/Solmar` into another Unity project, it updates itself: when the Editor starts,
+and every ten minutes while it's open, it checks GitHub for new work on this branch, downloads it
+and reimports, and the city rebuilds with the new code. Your scene in `Assets/Solmar/Scenes` is
+kept. **Solmar > Auto Update** turns this on or off, and **Solmar > Update Now** checks straight
+away. It's off in the repository's own Git checkout.
+
 ## Look around
 
 - **Scene view:** hold the right mouse button and use `W A S D`, with `Q`/`E` for down and up.
