@@ -113,6 +113,21 @@ in the active HDRP asset, because a new HDRP asset leaves some of them off:
 
 The Console lists anything it changed.
 
+## Let Claude work in the editor
+
+The project includes [MCP for Unity](https://github.com/CoplayDev/unity-mcp) (pinned to v10.0.0
+in `Packages/manifest.json`). It lets Claude Code on your computer open scenes, create objects,
+edit scripts and read the Console in the running editor. It only accepts connections from your
+own computer, so Claude has to run there, not in the cloud.
+
+1. Install **Python 3.10+** and **uv**: `pip install uv`, or see <https://docs.astral.sh/uv/>.
+2. Install **Claude Code**: see <https://claude.com/claude-code>.
+3. Open the project. Unity downloads the package on the first import.
+4. Choose **Window > MCP for Unity** and press **Configure All Detected Clients**. The window
+   shows when the server is running and Claude Code is set up.
+5. In a terminal in this `unity` folder, run `claude`, then `/mcp`. The Unity server should
+   show as connected. Keep the editor open while Claude works.
+
 ## Status
 
 The code is type-checked against Unity 6.0's published C# source and HDRP 17.0's source, for the
