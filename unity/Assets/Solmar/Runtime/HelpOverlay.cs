@@ -8,9 +8,9 @@ namespace Solmar
     public sealed class HelpOverlay : MonoBehaviour
     {
         const string Text =
-            "Fly: hold right mouse + W A S D, Q/E down/up, Shift faster\n" +
-            "F: walk / fly   (walking: click to look, Esc frees the mouse, Shift runs)\n" +
-            "G: get in / out of the car (W S drive, A D steer, Space handbrake, V camera)\n" +
+            "Walk: W A S D, Shift runs, Space jumps; click to look around (Esc frees the mouse), scroll zooms\n" +
+            "G by the red car: get in / out (W S drive, A D steer, Space handbrake, V camera)\n" +
+            "C: free-fly camera (hold right mouse + W A S D, Q/E down/up, Shift faster)\n" +
             "[ ]: time of day   hold T: fast-forward (lamps and windows light up at night)\n" +
             "F2: screenshot   F3: performance   F5: quality preset   F6: fps cap\n" +
             "H: hide this help";

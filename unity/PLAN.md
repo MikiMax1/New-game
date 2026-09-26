@@ -37,6 +37,11 @@ myself and only use sub-agents for big, separable jobs, to save your usage.
 - Physical sky, volumetric clouds and fog, soft shadows, reflections, synthesised city sound.
 - Fly and walk cameras, time of day, screenshots, Low to Extreme presets, no fps cap, the F3 overlay.
 - Auto-update into your Unity project, and a guard against broken meshes.
+- Palms in planted beds (1.1), more realistic cars (1.3), help overlay (1.4).
+- First road-network generator and a 4 × 4-block district (2.1, first cut of 2.2).
+- A third-person player with a code-built body and procedural walk (first cut of 3.1 and 3.2).
+- A drivable car with a chase camera and speedometer (first cut of 4.1 and 4.2).
+- Street lamps, windows and shops that light up at night (first cut of 5.3).
 
 **What's wrong now (from your playtest):** it's one straight road that ends in nothing, and the
 palms stand in concrete, and the cars look fake. Phases 1 and 2 fix all three.

@@ -36,11 +36,16 @@ away. It's off in the repository's own Git checkout.
 ## Look around
 
 - **Scene view:** hold the right mouse button and use `W A S D`, with `Q`/`E` for down and up.
-- **Play mode:** press Play and use the same controls. `Shift` moves faster.
-  - `F` switches to walking at eye level. Click to capture the mouse, and use `W A S D` with
-    `Shift` to run. `Esc` releases the mouse; `F` again flies.
+- **Play mode:** press Play and you are on foot, in third person, on the pavement.
+  - `W A S D` walks, `Shift` runs and `Space` jumps. Click to look around with the mouse (`Esc`
+    frees it), and scroll to zoom.
+  - `G` next to the red car gets in and out. Then `W`/`S` drive and brake, `A`/`D` steer, `Space`
+    is the handbrake and `V` switches between the chase and bonnet cameras.
+  - `C` switches to the free-fly camera (hold the right mouse button with `W A S D`, `Q`/`E`
+    down and up, `Shift` faster) and back.
   - `[` and `]` move the time of day by 15 minutes, and holding `T` fast-forwards. The day
-    starts at 18:16 on 26 September, with the sun low in the west-southwest.
+    starts at 18:16 on 26 September, with the sun low in the west-southwest. After sunset the
+    street lamps come on and the windows and shops light up.
   - `F2` saves a screenshot to `unity/Screenshots/`.
   - `F3` shows fps, the 1% low, CPU and GPU time, draw calls and a frame-time graph. For GPU
     time, turn on **Project Settings > Player > Other Settings > Frame Timing Stats**.
@@ -48,6 +53,8 @@ away. It's off in the repository's own Git checkout.
     cap: none (the default; vsync is off), 60, 120, 144, 165, 240.
   - `H` shows or hides the list of controls (it shows for ten seconds when Play starts).
   - If no keys work, set **Project Settings > Player > Active Input Handling** to **Both**.
+- **The district:** **Solmar > Create District Scene** makes a second scene with a 4 × 4-block
+  grid of streets, an avenue with a planted median, crossings, signals, lamps and buildings.
 - **Screenshots to send:** **Solmar > Capture Spot Screenshots** saves a 1920×1080 PNG of every
   camera spot to `unity/Screenshots/`.
 - **Camera spots:** under *Camera spots* there are *Hero*, *Crossing* and *Puddle*. Select one
