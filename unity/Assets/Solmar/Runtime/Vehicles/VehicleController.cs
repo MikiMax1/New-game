@@ -1,3 +1,4 @@
+using Solmar.Vehicles.Damage;
 using UnityEngine;
 
 namespace Solmar.Vehicles
@@ -22,6 +23,8 @@ namespace Solmar.Vehicles
     {
         [Header("Chassis")]
         public float mass = 1450f;
+
+        VehicleDamage damage;
         public Vector3 centerOfMassOffset = new Vector3(0f, -0.5f, -0.05f);
         /// <summary>Quadratic aerodynamic drag (N per (m/s)^2), the main thing capping top speed.</summary>
         public float aeroDragCoefficient = 0.75f;
@@ -334,6 +337,9 @@ namespace Solmar.Vehicles
                 }
             }
 
+            // A badly damaged engine loses power (VehicleDamage, added to every car at runtime).
+            if (damage == null) damage = GetComponent<VehicleDamage>();
+            if (damage != null) driveTorque *= damage.EnginePower01;
             if (!float.IsFinite(driveTorque)) driveTorque = 0f;
             if (!float.IsFinite(brakeTorque)) brakeTorque = 0f;
 
