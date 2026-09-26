@@ -3,21 +3,26 @@ using UnityEngine;
 namespace Solmar
 {
     /// <summary>
-    /// Third-person walking on a CharacterController: WASD moves camera-relative, Shift runs, Space
-    /// jumps, gravity and a step offset climb 15 cm kerbs. The body (this transform) turns smoothly
-    /// to face the direction it is moving in, independent of where the orbit camera is looking.
-    /// <see cref="PlayerBody"/> reads <see cref="Speed"/>, <see cref="NormalizedSpeed"/> and
-    /// <see cref="Grounded"/> to drive its procedural walk cycle, and <see cref="OrbitCamera"/> or
+    /// Third-person walking on a CharacterController: WASD moves camera-relative at a jog by
+    /// default, Ctrl walks, Shift sprints, Space jumps, gravity and a step offset climb 15 cm kerbs.
+    /// The body (this transform) turns smoothly to face the direction it is moving in, independent
+    /// of where the orbit camera is looking.
+    /// <see cref="PlayerBody"/> reads <see cref="Velocity"/> and <see cref="Grounded"/> (by way of
+    /// its own <c>HumanBody</c>) to drive its procedural walk cycle, and <see cref="OrbitCamera"/> or
     /// <see cref="PlayerSpawner"/> assign <see cref="cameraTransform"/> so movement is relative to
     /// the camera's facing.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public sealed class PlayerCharacter : MonoBehaviour
     {
-        public float walkSpeed = 1.4f;
-        public float runSpeed = 4.5f;
-        public float acceleration = 9f;
-        public float deceleration = 12f;
+        /// <summary>Held with Left/Right Ctrl: a slow, deliberate walk.</summary>
+        public float walkSpeed = 1.5f;
+        /// <summary>The default pace with no modifier held.</summary>
+        public float jogSpeed = 3.5f;
+        /// <summary>Held with Shift: a full sprint.</summary>
+        public float runSpeed = 6f;
+        public float acceleration = 11f;
+        public float deceleration = 15f;
         public float turnSmoothTime = 0.12f;
         public float jumpHeight = 1.2f;
         public float gravity = -20f;
@@ -44,6 +49,8 @@ namespace Solmar
         public float VerticalVelocity => verticalVelocity;
         /// <summary>The last non-zero horizontal direction the character moved in, world space.</summary>
         public Vector3 FacingDirection => lastMoveDirection;
+        /// <summary>World-space velocity (horizontal from the last-faced direction and current speed, plus vertical), for <see cref="PlayerBody"/>/<c>HumanBody</c> to animate from.</summary>
+        public Vector3 Velocity => lastMoveDirection * currentSpeed + Vector3.up * verticalVelocity;
 
         void Awake()
         {
@@ -64,8 +71,10 @@ namespace Solmar
             var input = new Vector2(strafe, forward);
             if (input.sqrMagnitude > 1f) input.Normalize();
 
-            Running = Input.GetKey(KeyCode.LeftShift);
-            float targetSpeed = input.magnitude * (Running ? runSpeed : walkSpeed);
+            Running = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool walkModifier = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+            float baseSpeed = Running ? runSpeed : (walkModifier ? walkSpeed : jogSpeed);
+            float targetSpeed = input.magnitude * baseSpeed;
 
             Transform cam = cameraTransform != null ? cameraTransform : (Camera.main != null ? Camera.main.transform : transform);
             Vector3 camForward = cam.forward;
