@@ -12,13 +12,16 @@ strip, neighbourhoods, a port and a highway. It has drivable cars, traffic, pede
 a phone and map, and a short story with side activities. It should look as close to real life as
 HDRP allows.
 
-| Claude can build in code | Needs art from outside (you choose, I integrate) |
-|---|---|
-| The whole city layout: roads, blocks, intersections, sidewalks, medians, beach, water, bridges | **Realistic people**: body models and animations. Free: Mixamo (needs your Adobe login). Paid: Asset Store character packs or Reallusion |
-| Buildings and interiors behind windows, street furniture, road markings | **Realistic cars**: procedural cars can be believable at a distance. Close-up realism needs outside models (free CC0/CC-BY, or about $20–60 a car on the Asset Store) |
-| Game systems: driving physics, traffic AI, pedestrians, police, missions, HUD, map, save/load, menus | **Photo-scanned textures**: free CC0 from Poly Haven and ambientCG. Needs those sites allowed in this environment's network settings, or you download them |
-| Lighting, sky, weather, water, performance, quality presets | **Voice acting and music**: optional; text and synth sound work until then |
-| Procedural palms, trees, hedges and grass (good at street distance) | Close-up vegetation: SpeedTree or an Asset Store palm pack, optional |
+**Rule (Max's choice): everything is made in code by Claude.** No bought or downloaded models,
+textures or animations. That means:
+
+- **City, buildings, props, vegetation, lighting and water** can look very convincing in code.
+- **Cars** get rebuilt with sharper panels, real wheel arches, inset glass and pillars, detailed
+  lamps and trim. They'll be good at street distance, but not photo-real up close.
+- **People** are the hardest part: code-built bodies with procedural animation (walk cycles and
+  inverse kinematics). They'll read as people at a distance but look stylised up close. Keeping
+  crowds at street distance and using good lighting helps.
+- **Sound and music** are synthesised.
 
 **How I work:** small steps, each one playable. After each step you playtest and send screenshots
 and F3 numbers. Updates reach RealisticGame by themselves (Solmar > Auto Update). I do the work
@@ -46,7 +49,7 @@ palms stand in concrete, and the cars look fake. Phases 1 and 2 fix all three.
 |---|---|
 | 1.1 | **Palms in soil, not concrete.** A landscaped median with grass, shrubs and royal palms; grass swales between the kerb and the sidewalk on residential streets; raised stone planters with ground cover downtown. No palm in bare paving |
 | 1.2 | Close the street ends: a T-junction with cross streets and buildings, so there's no void |
-| 1.3 | **Cars that look real.** The current procedural cars are too blobby. Procedural code can reach "believable at street distance" (sharper panel creases, real wheel arches, inset glass and pillars, proper lamp clusters, chrome and rubber trim), but not close-up photo realism. For that: realistic car models from outside (free CC0/CC-BY models, or Asset Store packs at about $20–60 each), plus a **car setup tool** I write that takes any imported car and gives it HDRP car paint (clear coat with metallic flakes), tinted glass, working lights, wheel colliders and LODs. Until you pick models, I improve the procedural cars |
+| 1.3 | **Better cars, in code.** Rebuild the bodies from real car proportions: sharp creases and shoulder lines, proper wheel arches with liners, a separate bumper, grille and lamp clusters, inset glass with black pillars and window trim, door gaps, mirrors on arms, chrome and rubber trim, detailed rims with brake discs, and car paint with metallic flakes |
 | 1.4 | Scene tidy-up: hide the editor grid and gizmos in the Game view, a default camera at eye level, and a small help overlay (`H`) listing the keys |
 
 ## Phase 2: A real city layout
@@ -66,7 +69,7 @@ palms stand in concrete, and the cars look fake. Phases 1 and 2 fix all three.
 | # | Work |
 |---|---|
 | 3.1 | Third-person character controller: walk, run, sprint, jump, climb low walls, swim; an orbit camera with collision |
-| 3.2 | A placeholder character first, then a realistic one with animations. **Needs you**: Mixamo clips or a character pack |
+| 3.2 | A code-built character (body, clothes, hair) with procedural animation: walk and run cycles, foot placement with inverse kinematics, turning and idle motion |
 | 3.3 | Health, stamina, ragdoll on falls and hits |
 
 ## Phase 4: Driving
@@ -105,7 +108,7 @@ palms stand in concrete, and the cars look fake. Phases 1 and 2 fix all three.
 
 | # | Work |
 |---|---|
-| 7.1 | Photo-scanned textures with anti-tiling; dirt, cracks, oil, litter and tyre marks as decals |
+| 7.1 | Richer procedural textures with anti-tiling; dirt, cracks, oil, litter and tyre marks as decals |
 | 7.2 | Ray-traced reflections, GI and shadows on Extreme (RTX GPUs); DLSS or FSR upscaling |
 | 7.3 | Cinematic colour grade matched to the GTA VI trailer look; lens effects; photo mode |
 | 7.4 | Close-up detail: parallax bricks and pavers, interiors you can enter in key buildings, detailed car interiors |
@@ -117,7 +120,7 @@ palms stand in concrete, and the cars look fake. Phases 1 and 2 fix all three.
 
 1. **1.1 Palms in soil**: median, swales and planters on the current street.
 2. **1.2 Close the street ends** with cross streets.
-3. **1.3 Cars**: the car setup tool, and better procedural cars in the meantime.
+3. **1.3 Better cars, in code.**
 4. **2.1 Road network generator**, then 2.2 blocks, giving a first grid of about 4 × 4 blocks you can walk and fly around.
 
 Each step: compile check, push, auto-update into your Unity, you playtest.
@@ -125,6 +128,4 @@ Each step: compile check, push, auto-update into your Unity, you playtest.
 ## What I need from you
 
 1. Screenshots and F3 numbers after each step.
-2. For step 1.3: whether to use outside car models (free or paid), so they look truly real up close.
-3. By Phase 3: your choice of character source (Mixamo, which is free, or a paid pack).
-4. Optional, any time: allow `polyhaven.com`, `dl.polyhaven.org`, `ambientcg.com` (textures) and `overpass-api.de` (real maps) in this environment's network settings.
+2. Optional: allow `overpass-api.de` in this environment's network settings, if you want real street layouts from OpenStreetMap (step 2.7).
